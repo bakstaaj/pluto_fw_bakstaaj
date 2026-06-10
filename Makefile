@@ -1,7 +1,7 @@
 
 VIVADO_VERSION ?= 2023.2
 
-# Use Buildroot External Linaro GCC 7.3-2018.05 arm-linux-gnueabihf Toolchain
+# Use Buildroot Extenal Linaro GCC 7.3-2018.05 arm-linux-gnueabihf Toolchain
 CROSS_COMPILE = arm-linux-gnueabihf-
 TOOLS_PATH = PATH="$(CURDIR)/buildroot/output/host/bin:$(CURDIR)/buildroot/output/host/sbin:$(PATH)"
 TOOLCHAIN = $(CURDIR)/buildroot/output/host/bin/$(CROSS_COMPILE)gcc
@@ -19,10 +19,10 @@ XSA_URL ?= http://github.com/analogdevicesinc/plutosdr-fw/releases/download/${LA
 ifeq (1, ${HAVE_VIVADO})
 	VIVADO_INSTALL= $(shell bash -c "source $(VIVADO_SETTINGS) > /dev/null 2>&1 && vivado -version | head -1 | awk '{print $2}'")
 	ifeq (, $(findstring $(VIVADO_VERSION), $(VIVADO_INSTALL)))
-$(warning *** This repository has only been tested with $(VIVADO_VERSION),)
-$(warning *** and you have $(VIVADO_INSTALL))
-$(warning *** Please 1] set the path to Vivado $(VIVADO_VERSION) OR)
-$(warning ***        2] remove $(VIVADO_INSTALL) from the path OR)
+$(waning *** This repository has only been tested with $(VIVADO_VERSION),)
+$(waning *** and you have $(VIVADO_INSTALL))
+$(waning *** Please 1] set the path to Vivado $(VIVADO_VERSION) OR)
+$(waning ***        2] remove $(VIVADO_INSTALL) from the path OR)
 $(error "      3] export VIVADO_VERSION=v20xx.x")
 	endif
 endif
@@ -35,7 +35,7 @@ TARGET_CONFIG_FILES ?=
 include scripts/$(TARGET).mk
 
 ifeq (, $(shell which dfu-suffix))
-$(warning "No dfu-utils in PATH consider doing: sudo apt-get install dfu-util")
+$(waning "No dfu-utils in PATH consider doing: sudo apt-get install dfu-util")
 TARGETS = build/$(TARGET).frm
 ifeq (1, ${HAVE_VIVADO})
 TARGETS += build/boot.frm jtag-bootstrap
@@ -199,13 +199,13 @@ dfu-$(TARGET): build/$(TARGET).dfu
 	dfu-util -e
 
 dfu-sf-uboot: build/boot.dfu build/uboot-env.dfu
-	echo "Erasing u-boot be careful - Press Return to continue... " && read key  && \
+	echo "Erasing u-boot be careful - Press Retun to continue... " && read key  && \
 		dfu-util -D build/boot.dfu -a boot.dfu && \
 		dfu-util -D build/uboot-env.dfu -a uboot-env.dfu
 	dfu-util -e
 
 dfu-all: build/$(TARGET).dfu build/boot.dfu build/uboot-env.dfu
-	echo "Erasing u-boot be careful - Press Return to continue... " && read key && \
+	echo "Erasing u-boot be careful - Press Retun to continue... " && read key && \
 		dfu-util -D build/$(TARGET).dfu -a firmware.dfu && \
 		dfu-util -D build/boot.dfu -a boot.dfu  && \
 		dfu-util -D build/uboot-env.dfu -a uboot-env.dfu

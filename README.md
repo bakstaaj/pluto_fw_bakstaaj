@@ -8,12 +8,16 @@ This build adds an install-time option for the size of the persistent JFFS2 part
 
 If you want any `/mnt/jffs2` size other than the stock layout, install the matching `boot.frm` first. The boot image contains the U-Boot logic that applies the selected flash layout before Linux starts.
 
-Safe install order:
+Safe install order when upgrading from stock or any firmware that does not already support `config.frm`:
 
 1. Install `boot.frm`
-2. Reboot
-3. Edit `config.frm`
-4. Install `pluto.frm`
+2. Safely eject the USB drive and wait for it to reappear
+3. Install `pluto.frm` once with the default layout
+4. Wait for the device to reboot and the USB drive to reappear
+5. Edit `config.frm`
+6. Install `pluto.frm` again to apply the selected `/mnt/jffs2` size
+
+The second `pluto.frm` install is required because the currently running firmware performs the USB mass-storage update. Stock PlutoSDR firmware does not know how to read `config.frm`, so the first custom firmware install can only install the new updater.
 
 Do not install a larger `config.frm` layout with an old bootloader. The firmware image will be written to a shifted flash offset that old U-Boot does not understand.
 
@@ -67,11 +71,17 @@ Connect the PlutoSDR to your computer. It should appear as a USB drive.
 
 Copy `boot.frm` to the root of the PlutoSDR USB drive.
 
-Eject the PlutoSDR USB drive cleanly. The device will process the update and reboot.
+Safely eject the PlutoSDR USB drive, but leave the USB cable connected. The device will process the update and the USB drive will reappear when the boot update is finished.
 
-After reboot, reconnect or wait for the PlutoSDR USB drive to reappear.
+Do not use the Pluto shell to check `/mnt/msd` before ejecting from the host computer. While the host owns the USB mass-storage volume, `/mnt/msd` may appear empty on the Pluto. The updater mounts and reads the volume after the host ejects it.
 
-### 2. Prepare `config.frm`
+### 2. Install The Firmware Once
+
+If the PlutoSDR is still running stock firmware, copy `pluto.frm` to the root of the PlutoSDR USB drive and eject the drive cleanly. This installs the custom firmware and updater using the stock flash layout.
+
+Wait for the device to reboot and the USB drive to reappear.
+
+### 3. Prepare `config.frm`
 
 Copy `config.frm` to the root of the PlutoSDR USB drive if it is not already there.
 
@@ -87,13 +97,36 @@ JFFS2_SIZE_MIB=4
 #JFFS2_SIZE_MIB=5
 ```
 
-### 3. Install The Firmware
+### 4. Install The Firmware With The Selected Layout
 
 Copy `pluto.frm` to the root of the PlutoSDR USB drive.
 
-Alternatively, copy `plutosdr-fw-*.zip` to the PlutoSDR USB drive. The updater will extract the firmware and `config.frm`. If an edited `config.frm` already exists on the drive, the updater keeps it instead of replacing it with the default.
+Altenatively, copy `plutosdr-fw-*.zip` to the PlutoSDR USB drive. The updater will extract the firmware and `config.frm`. If an edited `config.frm` already exists on the drive, the updater keeps it instead of replacing it with the default.
 
 Eject the PlutoSDR USB drive cleanly. The device will validate `config.frm`, update firmware, apply the selected layout, and reboot.
+
+The update starts only after the host computer ejects the USB drive. Seeing files in Windows Explorer but an empty `/mnt/msd` directory on the Pluto before eject is normal.
+
+## Verify The Layout
+
+After the update finishes and the PlutoSDR reboots, verify the selected layout from the Pluto shell:
+
+```sh
+fw_printenv jffs2_size_mib
+cat /proc/mtd
+df -h /mnt/jffs2
+sh -n /sbin/update.sh
+```
+
+For `JFFS2_SIZE_MIB=5`, the expected result is:
+
+```text
+jffs2_size_mib=5
+mtd2: 00500000 00010000 "qspi-nvmfs"
+mtd3: 019e0000 00010000 "qspi-linux"
+```
+
+`df -h /mnt/jffs2` should report a 5 MiB filesystem, and `sh -n /sbin/update.sh` should retun with no output.
 
 ## Status Files
 
@@ -145,6 +178,8 @@ Use DFU carefully. Updating the bootloader or U-Boot environment incorrectly can
 
 This fork is intended to be built in a Linux Docker container from WSL2. The boot image build requires Linux AMD/Xilinx Vivado/Vitis `2023.2` tools mounted at `/opt/Xilinx`.
 
+Build from a Linux/WSL checkout, or make sure Git preserves LF line endings for shell scripts. The firmware updater runs under BusyBox `/bin/sh` on the Pluto; CRLF line endings in scripts can prevent the updater from running after the USB drive is ejected.
+
 Normal firmware build:
 
 ```bash
@@ -184,4 +219,3 @@ docker run --rm -it \
 This firmware is derived from Analog Devices PlutoSDR firmware:
 
 https://github.com/analogdevicesinc/plutosdr-fw
-
