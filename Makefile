@@ -29,6 +29,7 @@ endif
 
 TARGET ?= pluto
 SUPPORTED_TARGETS:=pluto sidekiqz2
+TARGET_CONFIG_FILES ?=
 
 # Include target specific constants
 include scripts/$(TARGET).mk
@@ -175,6 +176,9 @@ build/$(TARGET).dfu: build/$(TARGET).itb
 	dfu-suffix -a $<.tmp -v $(DEVICE_VID) -p $(DEVICE_PID)
 	mv $<.tmp $@
 
+build/config.frm: buildroot/board/$(TARGET)/msd/config.frm | build
+	cp $< $@
+
 clean-build:
 	rm -f $(notdir $(wildcard build/*))
 	rm -rf build/*
@@ -187,7 +191,7 @@ clean:
 	rm -f $(notdir $(wildcard build/*))
 	rm -rf build/*
 
-zip-all: $(TARGETS)
+zip-all: $(TARGETS) $(TARGET_CONFIG_FILES)
 	zip -j build/$(ZIP_ARCHIVE_PREFIX)-fw-$(VERSION).zip $^
 
 dfu-$(TARGET): build/$(TARGET).dfu
