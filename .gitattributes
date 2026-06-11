@@ -1,7 +1,20 @@
 *.gitattributes text eol=lf
 *.sh text eol=lf
 *.md text eol=lf
-*.frm text eol=lf
 *.mk text eol=lf
 .gitmodules text eol=lf
 Makefile text eol=lf
+*.bat text eol=crlf
+*.tcl text eol=lf
+*.diff text eol=lf
+*.txt text eol=lf
+*.frm binary
+*.dfu binary
+*.itb binary
+*.bit binary
+*.zip binary
+*.gz binary
+*.xz binary
+*.dll binary
+*.exe binary
+*.a binary

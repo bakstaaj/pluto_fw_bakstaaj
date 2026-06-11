@@ -36,4 +36,7 @@
 *.su
 
 build/
+build-*/
+!build-assets/
+!build-assets/**
 .Xil

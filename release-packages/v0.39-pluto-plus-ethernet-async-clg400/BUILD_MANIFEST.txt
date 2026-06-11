@@ -1,0 +1,35 @@
+Pluto Plus ethernet-async firmware package
+
+Install files:
+- pluto.frm
+- config.frm
+
+Pluto Plus hardware jumper:
+- Set the USB reset jumper to USRT-MIO46 before booting this firmware.
+- Standard Pluto-style firmware uses MIO52 for USB PHY reset. This firmware
+  uses MIO52..MIO53 for Ethernet MDIO, so USB PHY reset is moved to MIO46.
+- If the jumper is left on USRT-MIO52, USB may not enumerate even though the
+  board appears to boot.
+
+Physical Ethernet:
+- eth0 starts asynchronously at boot.
+- If network DHCP fails, eth0 falls back to 192.168.3.1 and serves
+  192.168.3.10-192.168.3.99.
+
+Retained build/debug files:
+- system_top.bit: cached FPGA bitstream used for this build.
+- pluto-plus-source.frm: source firmware image used to extract system_top.bit.
+- pluto-plus-source.itb: FIT image from pluto-plus-source.frm.
+- pluto.itb: FIT image generated for this firmware package.
+- zImage: Linux kernel image.
+- rootfs.cpio.gz: generated root filesystem archive.
+- verify-zynq-pluto-sdr.dtb / .dts: extracted default DTB used for Ethernet/SD verification.
+
+Durable asset cache:
+- build-assets/pluto-plus-clg400
+
+Build hygiene:
+- Patched shell/DTS/config inputs are copied from the host, normalized to LF,
+  and checked for CRLF before the build continues.
+- board/pluto/msd/LICENSE.html is created from board/pluto/msd/LICENSE when
+  SKIP_LEGAL=1 is used.

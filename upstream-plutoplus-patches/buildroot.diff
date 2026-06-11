@@ -1,0 +1,281 @@
+diff --git a/board/pluto/S40network b/board/pluto/S40network
+index 067bbdc0..f5828ed4 100644
+--- a/board/pluto/S40network
++++ b/board/pluto/S40network
+@@ -22,6 +22,9 @@ create_system_files () {
+ 
+ 	ETH_IPADDR=`fw_printenv -n ipaddr_eth 2> /dev/null`
+ 	ETH_NETMASK=`fw_printenv -n netmask_eth 2> /dev/null || echo 255.255.255.0`
++	ETH_FALLBACK_IP=`fw_printenv -n ipaddr_eth_fallback 2> /dev/null || echo 192.168.3.1`
++	ETH_FALLBACK_START=`fw_printenv -n ipaddr_eth_fallback_start 2> /dev/null || echo 192.168.3.10`
++	ETH_FALLBACK_END=`fw_printenv -n ipaddr_eth_fallback_end 2> /dev/null || echo 192.168.3.99`
+ 
+ 	WLAN_SSID=`fw_printenv -n ssid_wlan 2> /dev/null`
+ 	WLAN_PWD=`fw_printenv -n pwd_wlan 2> /dev/null`
+@@ -43,14 +46,7 @@ create_system_files () {
+ 	echo -e "\taddress $IPADDR\n""\tnetmask $NETMASK\n" >> $IFAC
+ 	echo -e "auto usb1\n""iface usb1 inet dhcp\n" >> $IFAC
+ 
+-	echo -e "auto eth0" >> $IFAC
+-	if [ -n "$ETH_IPADDR" ]
+-	then
+-		echo -e "iface eth0 inet static" >> $IFAC
+-		echo -e "\taddress $ETH_IPADDR\n""\tnetmask $ETH_NETMASK\n" >> $IFAC
+-	else
+-		echo -e "iface eth0 inet dhcp\n" >> $IFAC
+-	fi
++	echo -e "iface eth0 inet manual\n" >> $IFAC
+ 
+ 	### /etc/wpa.conf ###
+ 	if [ -n "$WLAN_SSID" ]
+@@ -100,6 +96,9 @@ create_system_files () {
+ 	echo "[USB_ETHERNET]"$'\r' >> $CONF
+ 	echo "ipaddr_eth = $ETH_IPADDR"$'\r' >> $CONF
+ 	echo "netmask_eth = $ETH_NETMASK"$'\r' >> $CONF
++	echo "ipaddr_eth_fallback = $ETH_FALLBACK_IP"$'\r' >> $CONF
++	echo "ipaddr_eth_fallback_start = $ETH_FALLBACK_START"$'\r' >> $CONF
++	echo "ipaddr_eth_fallback_end = $ETH_FALLBACK_END"$'\r' >> $CONF
+ 	echo ""$'\r'>> $CONF
+ 	echo "[SYSTEM]"$'\r' >> $CONF
+ 	echo "xo_correction = $XO_CORRECTION"$'\r' >> $CONF
+@@ -128,6 +127,12 @@ case "$1" in
+ 	printf "Starting network: "
+ 	/bin/hostname -F /etc/hostname
+ 	/sbin/ifup -a 2>&1 | logger
++	ETH_IPADDR="$ETH_IPADDR" \
++	ETH_FALLBACK_IP="$ETH_FALLBACK_IP" \
++	ETH_FALLBACK_NETMASK="$ETH_NETMASK" \
++	ETH_FALLBACK_START="$ETH_FALLBACK_START" \
++	ETH_FALLBACK_END="$ETH_FALLBACK_END" \
++	/usr/sbin/pluto-eth-fallback eth0 >/dev/null 2>&1 &
+ 	[ $? = 0 ] && echo "OK" || echo "FAIL"
+ 	;;
+   stop)
+@@ -145,4 +150,3 @@ case "$1" in
+ esac
+ 
+ exit $?
+-
+diff --git a/board/pluto/S41network b/board/pluto/S41network
+index 78433a60..3bb88aa6 100644
+--- a/board/pluto/S41network
++++ b/board/pluto/S41network
+@@ -7,6 +7,9 @@ case "$1" in
+ 	start)
+ 		echo -n "Starting dhcpd Daemon & httpd Server: "
+ 		start-stop-daemon -S -q -p /var/run/udhcpd.pid -x /usr/sbin/udhcpd -- $UDHCPD_CONF
++		if [ -f /etc/udhcpd-eth0.conf ]; then
++			start-stop-daemon -S -q -p /var/run/udhcpd-eth0.pid -x /usr/sbin/udhcpd -- /etc/udhcpd-eth0.conf
++		fi
+ 		httpd -h /www
+ 		[ $? = 0 ] && echo "OK" || echo "FAIL"
+ 		;;
+@@ -15,6 +18,8 @@ case "$1" in
+ 		echo -n "Stopping dhcpd Daemon & httpd Server: "
+ 		killall -7 httpd
+ 		start-stop-daemon -K -q -p /var/run/udhcpd.pid 2>/dev/null
++		start-stop-daemon -K -q -p /var/run/udhcpd-eth0.pid 2>/dev/null
++		start-stop-daemon -K -q -p /var/run/udhcpc-eth0.pid 2>/dev/null
+ 		[ $? = 0 ] && echo "OK" || echo "FAIL"
+ 		;;
+ 
+diff --git a/board/pluto/automounter.sh b/board/pluto/automounter.sh
+index 0d093a53..781728ce 100644
+--- a/board/pluto/automounter.sh
++++ b/board/pluto/automounter.sh
+@@ -16,11 +16,21 @@ do_mount()
+ {
+ 	local errno
+ 	local err
++	local opts
+ 
+ 	errno=0
++	case "$1" in
++		mmcblk*)
++			opts=noatime
++			;;
++		*)
++			opts=sync
++			;;
++	esac
++
+ 	for I in $(seq 5)
+ 	do
+-		err=$(mount -t auto -o sync "/dev/$1" "${destdir}/$1" 2>&1)
++		err=$(mount -t auto -o "${opts}" "/dev/$1" "${destdir}/$1" 2>&1)
+ 		errno=$?
+ 
+ 		# If we get a "Device or resource busy" error, retry again in a
+diff --git a/board/pluto/ifupdown.sh b/board/pluto/ifupdown.sh
+index 0e75ce18..2faa4f8b 100644
+--- a/board/pluto/ifupdown.sh
++++ b/board/pluto/ifupdown.sh
+@@ -3,10 +3,20 @@
+ case "${ACTION}" in
+ add|"")
+ 	ifconfig ${MDEV} up
+-	ifup ${MDEV}
+-	echo $(ip -f inet -o addr show ${MDEV}|cut -d\  -f 7 | cut -d/ -f 1) > /opt/ipaddr-${MDEV}
++	if [ "${MDEV}" = "eth0" ]; then
++		/usr/sbin/pluto-eth-fallback ${MDEV} >/dev/null 2>&1 &
++	else
++		ifup ${MDEV}
++		echo $(ip -f inet -o addr show ${MDEV}|cut -d\  -f 7 | cut -d/ -f 1) > /opt/ipaddr-${MDEV}
++	fi
+ 	;;
+ remove)
+-	ifdown ${MDEV}
++	if [ "${MDEV}" = "eth0" ]; then
++		start-stop-daemon -K -q -p /var/run/udhcpd-eth0.pid 2>/dev/null
++		start-stop-daemon -K -q -p /var/run/udhcpc-eth0.pid 2>/dev/null
++		ifconfig ${MDEV} down
++	else
++		ifdown ${MDEV}
++	fi
+ 	;;
+ esac
+diff --git a/board/pluto/mdev.conf b/board/pluto/mdev.conf
+index 09ad12fb..e9c0c022 100644
+--- a/board/pluto/mdev.conf
++++ b/board/pluto/mdev.conf
+@@ -1,6 +1,8 @@
+ # block devices
+ sd[a-z]      root:root     660 */lib/mdev/automounter.sh
+ sd[a-z][0-9]      root:root     660 */lib/mdev/automounter.sh
++mmcblk[0-9]p[0-9] root:root     660 */lib/mdev/automounter.sh
++mmcblk[0-9]p[0-9][0-9] root:root     660 */lib/mdev/automounter.sh
+ # net devices
+ wlan[0-9] root:root     660 */lib/mdev/ifupdown.sh
+ usb[0-9] root:root     660 */lib/mdev/ifupdown.sh
+diff --git a/board/pluto/post-build.sh b/board/pluto/post-build.sh
+index 03021a49..b9ee0e94 100755
+--- a/board/pluto/post-build.sh
++++ b/board/pluto/post-build.sh
+@@ -72,6 +72,7 @@ ${INSTALL} -D -m 0755 ${BOARD_DIR}/device_reboot ${TARGET_DIR}/usr/sbin/
+ ${INSTALL} -D -m 0755 ${BOARD_DIR}/device_passwd ${TARGET_DIR}/usr/sbin/
+ ${INSTALL} -D -m 0755 ${BOARD_DIR}/device_persistent_keys ${TARGET_DIR}/usr/sbin/
+ ${INSTALL} -D -m 0755 ${BOARD_DIR}/device_format_jffs2 ${TARGET_DIR}/usr/sbin/
++${INSTALL} -D -m 0755 ${BOARD_DIR}/pluto-eth-fallback ${TARGET_DIR}/usr/sbin/
+ ${INSTALL} -D -m 0644 ${BOARD_DIR}/motd ${TARGET_DIR}/etc/
+ ${INSTALL} -D -m 0755 ${BOARD_DIR}/test_ensm_pinctrl.sh ${TARGET_DIR}/usr/sbin/
+ ${INSTALL} -D -m 0644 ${BOARD_DIR}/device_config ${TARGET_DIR}/etc/
+diff --git a/board/pluto/update.sh b/board/pluto/update.sh
+index 2a752f7b..ffd6a176 100644
+--- a/board/pluto/update.sh
++++ b/board/pluto/update.sh
+@@ -208,6 +208,9 @@ process_ini() {
+ 		echo "usb_ethernet_mode $usb_ethernet_mode" >> /opt/fw_set.tmp
+ 		echo "ipaddr_eth $ipaddr_eth" >> /opt/fw_set.tmp
+ 		echo "netmask_eth $netmask_eth" >> /opt/fw_set.tmp
++		echo "ipaddr_eth_fallback $ipaddr_eth_fallback" >> /opt/fw_set.tmp
++		echo "ipaddr_eth_fallback_start $ipaddr_eth_fallback_start" >> /opt/fw_set.tmp
++		echo "ipaddr_eth_fallback_end $ipaddr_eth_fallback_end" >> /opt/fw_set.tmp
+ 		fw_setenv -s /opt/fw_set.tmp
+ 		rm /opt/fw_set.tmp
+ 		flash_indication_off
+diff --git a/board/pluto/pluto-eth-fallback b/board/pluto/pluto-eth-fallback
+new file mode 100644
+index 00000000..43f8bca0
+--- /dev/null
++++ b/board/pluto/pluto-eth-fallback
+@@ -0,0 +1,100 @@
++#!/bin/sh
++
++IFACE="${1:-eth0}"
++STATIC_IP="${ETH_IPADDR:-$(fw_printenv -n ipaddr_eth 2>/dev/null || true)}"
++FALLBACK_IP="${ETH_FALLBACK_IP:-$(fw_printenv -n ipaddr_eth_fallback 2>/dev/null || echo 192.168.3.1)}"
++FALLBACK_NETMASK="${ETH_FALLBACK_NETMASK:-$(fw_printenv -n netmask_eth 2>/dev/null || echo 255.255.255.0)}"
++FALLBACK_START="${ETH_FALLBACK_START:-$(fw_printenv -n ipaddr_eth_fallback_start 2>/dev/null || echo 192.168.3.10)}"
++FALLBACK_END="${ETH_FALLBACK_END:-$(fw_printenv -n ipaddr_eth_fallback_end 2>/dev/null || echo 192.168.3.99)}"
++UDHCPD_ETH_CONF="${UDHCPD_ETH_CONF:-/etc/udhcpd-eth0.conf}"
++UDHCPD_ETH_PID="${UDHCPD_ETH_PID:-/var/run/udhcpd-eth0.pid}"
++UDHCPD_ETH_LEASES="${UDHCPD_ETH_LEASES:-/var/lib/misc/udhcpd-eth0.leases}"
++UDHCPC_ETH_PID="${UDHCPC_ETH_PID:-/var/run/udhcpc-eth0.pid}"
++
++log() {
++	logger -t pluto-eth-fallback "$*"
++}
++
++iface_exists() {
++	ip link show "$IFACE" >/dev/null 2>&1
++}
++
++current_ipv4() {
++	ip -4 -o addr show dev "$IFACE" 2>/dev/null | awk '{print $4}' | cut -d/ -f1 | head -n 1
++}
++
++stop_eth_dhcpd() {
++	start-stop-daemon -K -q -p "$UDHCPD_ETH_PID" 2>/dev/null || true
++}
++
++stop_eth_udhcpc() {
++	start-stop-daemon -K -q -p "$UDHCPC_ETH_PID" 2>/dev/null || true
++}
++
++start_eth_dhcpd() {
++	mkdir -p "$(dirname "$UDHCPD_ETH_LEASES")"
++	touch "$UDHCPD_ETH_LEASES"
++
++	cat > "$UDHCPD_ETH_CONF" <<EOF
++start $FALLBACK_START
++end $FALLBACK_END
++interface $IFACE
++pidfile $UDHCPD_ETH_PID
++lease_file $UDHCPD_ETH_LEASES
++option subnet $FALLBACK_NETMASK
++option router $FALLBACK_IP
++option lease 86400
++EOF
++
++	if [ -s "$UDHCPD_ETH_PID" ] && kill -0 "$(cat "$UDHCPD_ETH_PID")" 2>/dev/null; then
++		return 0
++	fi
++
++	start-stop-daemon -S -q -p "$UDHCPD_ETH_PID" -x /usr/sbin/udhcpd -- "$UDHCPD_ETH_CONF" || \
++		/usr/sbin/udhcpd "$UDHCPD_ETH_CONF"
++}
++
++if ! iface_exists; then
++	log "$IFACE is not present"
++	exit 0
++fi
++
++stop_eth_dhcpd
++ip link set "$IFACE" up 2>/dev/null || ifconfig "$IFACE" up
++
++if [ -n "$STATIC_IP" ]; then
++	stop_eth_udhcpc
++	ip addr flush dev "$IFACE" 2>/dev/null || true
++	ifconfig "$IFACE" "$STATIC_IP" netmask "$FALLBACK_NETMASK" up
++	echo "$STATIC_IP" > "/opt/ipaddr-$IFACE"
++	rm -f "$UDHCPD_ETH_CONF"
++	log "$IFACE static address active: $STATIC_IP"
++	exit 0
++fi
++
++IPADDR="$(current_ipv4)"
++if [ -n "$IPADDR" ] && [ "$IPADDR" != "$FALLBACK_IP" ]; then
++	echo "$IPADDR" > "/opt/ipaddr-$IFACE"
++	rm -f "$UDHCPD_ETH_CONF"
++	log "$IFACE DHCP lease acquired: $IPADDR"
++	exit 0
++fi
++
++stop_eth_udhcpc
++ip addr flush dev "$IFACE" 2>/dev/null || true
++
++if udhcpc -i "$IFACE" -n -q -t 3 -T 2 -p "$UDHCPC_ETH_PID"; then
++	IPADDR="$(current_ipv4)"
++	if [ -n "$IPADDR" ]; then
++		echo "$IPADDR" > "/opt/ipaddr-$IFACE"
++		rm -f "$UDHCPD_ETH_CONF"
++		log "$IFACE DHCP lease acquired: $IPADDR"
++		exit 0
++	fi
++fi
++
++ip addr flush dev "$IFACE" 2>/dev/null || true
++ifconfig "$IFACE" "$FALLBACK_IP" netmask "$FALLBACK_NETMASK" up
++echo "$FALLBACK_IP" > "/opt/ipaddr-$IFACE"
++start_eth_dhcpd
++log "$IFACE DHCP fallback active at $FALLBACK_IP, serving $FALLBACK_START-$FALLBACK_END"

@@ -6,6 +6,14 @@ This build adds an install-time option for the size of the persistent JFFS2 part
 
 ## Read This First
 
+## Pluto Plus USB Reset Jumper
+
+For this Pluto Plus Ethernet/SD firmware, set the board jumper from `USRT-MIO52` to `USRT-MIO46` before booting the firmware.
+
+Standard Pluto-style firmware uses `MIO52` as the USB PHY reset signal. This Pluto Plus firmware enables the physical Ethernet controller, which uses `MIO52..MIO53` for Ethernet MDIO. Because `MIO52` is no longer available for USB reset, the firmware moves USB PHY reset to `MIO46`.
+
+If the jumper is left on `USRT-MIO52`, the firmware can boot far enough to light LEDs but USB may never enumerate. Typical symptoms are no D: drive, no normal USB gadget, and sometimes only forced DFU recovery appears. With this firmware, leave the jumper on `USRT-MIO46`. Move it back to `USRT-MIO52` only when returning to standard Pluto-style firmware that expects USB reset on `MIO52`.
+
 If you want any `/mnt/jffs2` size other than the stock layout, install the matching `boot.frm` first. The boot image contains the U-Boot logic that applies the selected flash layout before Linux starts.
 
 Safe install order when upgrading from stock or any firmware that does not already support `config.frm`:
