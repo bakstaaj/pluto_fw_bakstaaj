@@ -2,7 +2,7 @@
 
 Custom PlutoSDR firmware based on Analog Devices `plutosdr-fw` release `v0.39`.
 
-This build adds an install-time option for the size of the persistent JFFS2 partition mounted at `/mnt/jffs2`. The selected size is controlled by `config.frm` when installing firmware.
+This build adds an install-time option for the size of the persistent JFFS2 partition mounted at `/mnt/jffs2`. The selected size is controlled by `config.frm` when installing firmware. It also includes access to the SD Card for persistent file storage. The ethernet interface is enabled with a short DHCP address check with local DHCP server fallback using `192.168.3.1/24` scope.
 
 ## Read This First
 
