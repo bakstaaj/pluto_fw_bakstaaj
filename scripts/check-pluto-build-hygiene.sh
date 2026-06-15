@@ -3,8 +3,11 @@ set -euo pipefail
 
 files=(
 	scripts/container-build-ethernet-async.sh
+	buildroot/board/pluto/S21misc
 	buildroot/board/pluto/S40network
 	buildroot/board/pluto/S41network
+	buildroot/board/pluto/S50dropbear
+	buildroot/board/pluto/device_persistent_keys
 	buildroot/board/pluto/ifupdown.sh
 	buildroot/board/pluto/post-build.sh
 	buildroot/board/pluto/update.sh
@@ -15,14 +18,26 @@ files=(
 	buildroot/board/pluto/pluto-eth-fallback
 	linux/arch/arm/boot/dts/zynq-pluto-sdr.dtsi
 	linux/arch/arm/configs/zynq_pluto_defconfig
+	u-boot-xlnx/include/configs/zynq-common.h
 )
 
-bash -n scripts/container-build-ethernet-async.sh
-sh -n buildroot/board/pluto/S41network
-sh -n buildroot/board/pluto/ifupdown.sh
-sh -n buildroot/board/pluto/pluto-eth-fallback
+bash_bin="${BASH:-bash}"
+tool_dir="${bash_bin%/*}"
+export PATH="$tool_dir:$PATH"
+sh_bin="$tool_dir/sh"
 
-crlf_report="$(mktemp)"
+"$bash_bin" -n scripts/container-build-ethernet-async.sh
+"$sh_bin" -n buildroot/board/pluto/S21misc
+"$sh_bin" -n buildroot/board/pluto/S40network
+"$sh_bin" -n buildroot/board/pluto/S41network
+"$sh_bin" -n buildroot/board/pluto/S50dropbear
+"$sh_bin" -n buildroot/board/pluto/device_persistent_keys
+"$sh_bin" -n buildroot/board/pluto/ifupdown.sh
+"$sh_bin" -n buildroot/board/pluto/update.sh
+"$sh_bin" -n buildroot/board/pluto/pluto-eth-fallback
+
+crlf_report=".check-pluto-build-hygiene.crlf.$$"
+: > "$crlf_report"
 for file in "${files[@]}"; do
 	if perl -ne 'exit 1 if /\r/' "$file"; then
 		:
@@ -40,6 +55,11 @@ rm -f "$crlf_report"
 
 if [ ! -f buildroot/board/pluto/msd/LICENSE ] && [ ! -f buildroot/board/pluto/msd/LICENSE.html ]; then
 	echo "Missing board/pluto MSD license source" >&2
+	exit 1
+fi
+
+if [ ! -f scripts/FULL_DFU_UPDATE.bat ]; then
+	echo "Missing Windows full DFU loader template" >&2
 	exit 1
 fi
 

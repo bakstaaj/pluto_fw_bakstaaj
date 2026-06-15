@@ -4,13 +4,26 @@ set -euo pipefail
 cd /work/src
 
 target_name="pluto"
-package_label="ethernet-async"
+package_label="${PACKAGE_LABEL:-ethernet-async}"
 default_out="/host/build-ethernet-async-fw-plutoplus-clg400"
 asset_dir="${ASSET_DIR:-/host/build-assets/pluto-plus-clg400}"
 out="${OUT_DIR:-$default_out}"
 release_dir="build/pluto-plus-release"
 source_frm="$release_dir/pluto.frm"
 source_itb="$release_dir/pluto.itb"
+host_dir="${HOST_DIR:-/host}"
+
+copy_from_host() {
+	local rel="$1"
+	local src="$host_dir/$rel"
+	local dst="$rel"
+
+	if [ "$(readlink -f "$src" 2>/dev/null || echo "$src")" = "$(readlink -f "$dst" 2>/dev/null || echo "$dst")" ]; then
+		return
+	fi
+
+	cp "$src" "$dst"
+}
 
 git config --global --add safe.directory /work/src
 git config --global --add safe.directory /work/src/buildroot
@@ -19,8 +32,11 @@ git config --global --add safe.directory /work/src/hdl
 git config --global --add safe.directory /work/src/u-boot-xlnx
 
 patched_files=(
+	buildroot/board/pluto/S21misc \
 	buildroot/board/pluto/S40network \
 	buildroot/board/pluto/S41network \
+	buildroot/board/pluto/S50dropbear \
+	buildroot/board/pluto/device_persistent_keys \
 	buildroot/board/pluto/ifupdown.sh \
 	buildroot/board/pluto/post-build.sh \
 	buildroot/board/pluto/update.sh \
@@ -30,23 +46,28 @@ patched_files=(
 	buildroot/board/pluto/automounter.sh \
 	buildroot/board/pluto/pluto-eth-fallback \
 	linux/arch/arm/boot/dts/zynq-pluto-sdr.dtsi \
-	linux/arch/arm/configs/zynq_pluto_defconfig
+	linux/arch/arm/configs/zynq_pluto_defconfig \
+	u-boot-xlnx/include/configs/zynq-common.h
 )
 
 mkdir -p "$release_dir" build "$asset_dir" "$out"
 
-cp /host/buildroot/board/pluto/S40network buildroot/board/pluto/S40network
-cp /host/buildroot/board/pluto/S41network buildroot/board/pluto/S41network
-cp /host/buildroot/board/pluto/ifupdown.sh buildroot/board/pluto/ifupdown.sh
-cp /host/buildroot/board/pluto/post-build.sh buildroot/board/pluto/post-build.sh
-cp /host/buildroot/board/pluto/update.sh buildroot/board/pluto/update.sh
-cp /host/buildroot/board/pluto/update_frm.sh buildroot/board/pluto/update_frm.sh
-cp /host/buildroot/board/pluto/msd/config.frm buildroot/board/pluto/msd/config.frm
-cp /host/buildroot/board/pluto/mdev.conf buildroot/board/pluto/mdev.conf
-cp /host/buildroot/board/pluto/automounter.sh buildroot/board/pluto/automounter.sh
-cp /host/buildroot/board/pluto/pluto-eth-fallback buildroot/board/pluto/pluto-eth-fallback
-cp /host/linux/arch/arm/boot/dts/zynq-pluto-sdr.dtsi linux/arch/arm/boot/dts/zynq-pluto-sdr.dtsi
-cp /host/linux/arch/arm/configs/zynq_pluto_defconfig linux/arch/arm/configs/zynq_pluto_defconfig
+copy_from_host buildroot/board/pluto/S21misc
+copy_from_host buildroot/board/pluto/S40network
+copy_from_host buildroot/board/pluto/S41network
+copy_from_host buildroot/board/pluto/S50dropbear
+copy_from_host buildroot/board/pluto/device_persistent_keys
+copy_from_host buildroot/board/pluto/ifupdown.sh
+copy_from_host buildroot/board/pluto/post-build.sh
+copy_from_host buildroot/board/pluto/update.sh
+copy_from_host buildroot/board/pluto/update_frm.sh
+copy_from_host buildroot/board/pluto/msd/config.frm
+copy_from_host buildroot/board/pluto/mdev.conf
+copy_from_host buildroot/board/pluto/automounter.sh
+copy_from_host buildroot/board/pluto/pluto-eth-fallback
+copy_from_host linux/arch/arm/boot/dts/zynq-pluto-sdr.dtsi
+copy_from_host linux/arch/arm/configs/zynq_pluto_defconfig
+copy_from_host u-boot-xlnx/include/configs/zynq-common.h
 
 perl -pi -e 's/\r$//' "${patched_files[@]}"
 
@@ -61,8 +82,11 @@ fi
 rm -f "$crlf_report"
 
 chmod +x \
+	buildroot/board/pluto/S21misc \
 	buildroot/board/pluto/S40network \
 	buildroot/board/pluto/S41network \
+	buildroot/board/pluto/S50dropbear \
+	buildroot/board/pluto/device_persistent_keys \
 	buildroot/board/pluto/ifupdown.sh \
 	buildroot/board/pluto/update.sh \
 	buildroot/board/pluto/update_frm.sh \
@@ -77,20 +101,20 @@ fi
 if [ -f "$asset_dir/pluto-plus-source.frm" ]; then
 	cp "$asset_dir/pluto-plus-source.frm" "$source_frm"
 elif [ ! -f "$source_frm" ]; then
-	cp /host/build-sdcard-fw-plutoplus-clg400/pluto.frm "$source_frm"
+	cp "$host_dir/build-sdcard-fw-plutoplus-clg400/pluto.frm" "$source_frm"
 fi
 if [ ! -f build/boot.frm ]; then
 	if [ -f "$asset_dir/boot.frm" ]; then
 		cp "$asset_dir/boot.frm" build/boot.frm
 	else
-		cp /host/build-sdcard-fw-plutoplus-clg400/boot.frm build/boot.frm
+		cp "$host_dir/build-sdcard-fw-plutoplus-clg400/boot.frm" build/boot.frm
 	fi
 fi
 if [ ! -f build/boot.dfu ]; then
 	if [ -f "$asset_dir/boot.dfu" ]; then
 		cp "$asset_dir/boot.dfu" build/boot.dfu
 	else
-		cp /host/build-sdcard-fw-plutoplus-clg400/boot.dfu build/boot.dfu
+		cp "$host_dir/build-sdcard-fw-plutoplus-clg400/boot.dfu" build/boot.dfu
 	fi
 fi
 
@@ -198,6 +222,8 @@ cp build/system_top.bit "$out/system_top.bit"
 cp "$source_frm" "$out/pluto-plus-source.frm"
 cp "$source_itb" "$out/pluto-plus-source.itb"
 cp build/pluto.itb "$out/pluto.itb"
+cp "$host_dir/scripts/FULL_DFU_UPDATE.bat" "$out/FULL_DFU_UPDATE.bat"
+cp "$host_dir/README.md" "$out/README.md"
 
 for extra_artifact in \
 	build/zImage \
@@ -209,34 +235,6 @@ for extra_artifact in \
 	fi
 done
 
-(
-	cd "$out"
-	rm -f plutosdr-fw-plutoplus-*-clg400-complete.zip
-	python3 - <<'PY'
-import zipfile
-import os
-
-names = ["boot.frm", "boot.dfu", "pluto.frm", "pluto.dfu", "uboot-env.dfu", "config.frm"]
-zip_name = os.environ["COMPLETE_ZIP"]
-with zipfile.ZipFile(zip_name, "w", zipfile.ZIP_DEFLATED) as zf:
-    for name in names:
-        zf.write(name, name)
-PY
-	sha256sum \
-		boot.frm \
-		boot.dfu \
-		pluto.frm \
-		pluto.dfu \
-		uboot-env.dfu \
-		config.frm \
-		system_top.bit \
-		pluto-plus-source.frm \
-		pluto-plus-source.itb \
-		pluto.itb \
-		"$zip_name" \
-		"$complete_zip" \
-		> SHA256SUMS.txt
-)
 cat > "$out/BUILD_MANIFEST.txt" <<EOF
 Pluto Plus $package_label firmware package
 
@@ -244,17 +242,52 @@ Install files:
 - pluto.frm
 - config.frm
 
+Recommended full deployment:
+- Set the Pluto Plus USB reset jumper to USRT-MIO52.
+- Press and hold the DFU button while plugging in or resetting the board. Hold
+  it for about 5-10 seconds, until Windows enumerates the DFU device.
+- Move the USB reset jumper to USRT-MIO46 before flashing or booting this
+  firmware.
+- Run FULL_DFU_UPDATE.bat from the extracted package directory. It flashes
+  pluto.dfu, boot.dfu, and uboot-env.dfu.
+- When the Pluto USB mass-storage drive appears, edit config.frm to select the
+  desired JFFS2_SIZE_MIB value.
+- Copy pluto.frm and the edited config.frm to the root of the Pluto USB drive.
+- Safely eject the Pluto USB drive, but do not disconnect the USB cable.
+- After the device reboots and the USB drive comes back, adjust config.txt
+  runtime settings as needed and safely eject again.
+- After the final reboot, physically disconnect and reconnect the USB cable.
+  Leave the jumper on USRT-MIO46 for normal use with this firmware.
+
 Pluto Plus hardware jumper:
-- Set the USB reset jumper to USRT-MIO46 before booting this firmware.
 - Standard Pluto-style firmware uses MIO52 for USB PHY reset. This firmware
   uses MIO52..MIO53 for Ethernet MDIO, so USB PHY reset is moved to MIO46.
-- If the jumper is left on USRT-MIO52, USB may not enumerate even though the
-  board appears to boot.
+- If the jumper is left on USRT-MIO52 after this firmware is installed, USB may
+  not enumerate even though the board appears to boot.
 
 Physical Ethernet:
 - eth0 starts asynchronously at boot.
 - If network DHCP fails, eth0 falls back to 192.168.3.1 and serves
   192.168.3.10-192.168.3.99.
+
+RF / hostname / keys:
+- U-Boot defaults AD936x extended range settings at boot. Rev.C hardware uses
+  attr_val/compatible=ad9361 with mode=2r2t; other Pluto-style hardware uses
+  attr_val/compatible=ad9364 with mode=1r1t.
+- config.txt includes an editable [AD936X] section for attr_name, attr_val,
+  compatible, mode, and force_2r2t.
+- On Pluto Plus boards with populated TX2/RX2 hardware, set force_2r2t=1 to
+  select the Rev.C FIT device tree and force ad9361/2r2t at boot for testing.
+- Hostname defaults to pluto and Avahi/zeroconf is enabled for pluto.local.
+- Dropbear host keys are persisted to /mnt/jffs2 with device_persistent_keys.
+- config.txt includes device_persistent_keys = 0 under [ACTIONS]. Setting it
+  to 1 manually refreshes persisted Dropbear keys and writes
+  PERSISTENT_KEYS_STATUS.
+
+DFU loader:
+- FULL_DFU_UPDATE.bat flashes pluto.dfu, boot.dfu, and uboot-env.dfu from a
+  forced DFU session. It is intended for complete package deployment and
+  rewrites the U-Boot environment.
 
 Retained build/debug files:
 - system_top.bit: cached FPGA bitstream used for this build.
@@ -274,6 +307,48 @@ Build hygiene:
 - board/pluto/msd/LICENSE.html is created from board/pluto/msd/LICENSE when
   SKIP_LEGAL=1 is used.
 EOF
+
+(
+	cd "$out"
+	rm -f plutosdr-fw-plutoplus-*-clg400-complete.zip
+	python3 - <<'PY'
+import zipfile
+import os
+
+names = [
+    "README.md",
+    "BUILD_MANIFEST.txt",
+    "boot.frm",
+    "boot.dfu",
+    "pluto.frm",
+    "pluto.dfu",
+    "uboot-env.dfu",
+    "config.frm",
+    "FULL_DFU_UPDATE.bat",
+]
+zip_name = os.environ["COMPLETE_ZIP"]
+with zipfile.ZipFile(zip_name, "w", zipfile.ZIP_DEFLATED) as zf:
+    for name in names:
+        zf.write(name, name)
+PY
+	sha256sum \
+		README.md \
+		BUILD_MANIFEST.txt \
+		boot.frm \
+		boot.dfu \
+		pluto.frm \
+		pluto.dfu \
+		uboot-env.dfu \
+		config.frm \
+		system_top.bit \
+		pluto-plus-source.frm \
+		pluto-plus-source.itb \
+		pluto.itb \
+		FULL_DFU_UPDATE.bat \
+		"$zip_name" \
+		"$complete_zip" \
+		> SHA256SUMS.txt
+)
 
 echo "Artifacts:"
 ls -lh "$out"

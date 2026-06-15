@@ -4,15 +4,66 @@ Custom PlutoSDR firmware based on Analog Devices `plutosdr-fw` release `v0.39`.
 
 This build adds an install-time option for the size of the persistent JFFS2 partition mounted at `/mnt/jffs2`. The selected size is controlled by `config.frm` when installing firmware. It also includes access to the SD Card for persistent file storage. The ethernet interface is enabled with a short DHCP address check with local DHCP server fallback using `192.168.3.1/24` scope.
 
+The firmware also enables Pluto's extended AD936x tuning configuration for the 70 MHz to 6000 MHz range. U-Boot sets `attr_name=compatible` and selects `attr_val`/`compatible` plus `mode` from the detected Pluto hardware model: Rev.C hardware uses `ad9361` with `2r2t`, while other Pluto-style models use `ad9364` with `1r1t`. These values are exposed in `config.txt` under `[AD936X]` for later adjustment if needed. Pluto Plus boards with populated TX2/RX2 hardware can be tested in Rev.C-style 2R2T mode by setting `force_2r2t = 1`; this selects the Rev.C FIT device tree and forces `ad9361`/`2r2t` at boot. Dropbear host keys are persisted to `/mnt/jffs2` automatically through `device_persistent_keys`, and zeroconf is available with hostname `pluto` so hosts with mDNS support can reach `pluto.local`.
+
+The generated `config.txt` also includes `device_persistent_keys = 0` under `[ACTIONS]`. Set it to `1`, save, and eject the USB mass-storage drive to manually refresh persisted Dropbear keys; the updater writes `PERSISTENT_KEYS_STATUS` with the command output and resets the action to `0`.
+
 ## Read This First
+
+## Recommended Full Deployment From DFU
+
+Use this procedure when installing this Pluto Plus Ethernet/SD firmware package from DFU. Keep the USB cable connected until the final reconnect step.
+
+1. Set the Pluto Plus USB reset jumper to `USRT-MIO52`.
+2. Press and hold the DFU button while plugging in or resetting the Pluto Plus. Hold it for about 5-10 seconds, until Windows enumerates the device in DFU mode.
+3. Move the USB reset jumper to `USRT-MIO46`. This is the required running position for this firmware.
+4. From the extracted firmware package directory, run `FULL_DFU_UPDATE.bat`. The script flashes `pluto.dfu`, `boot.dfu`, and `uboot-env.dfu`.
+5. Wait for the Pluto USB mass-storage drive to appear in Windows. It is often `D:`, but use whichever drive letter Windows assigns.
+6. Edit `config.frm` on your computer and select the desired `JFFS2_SIZE_MIB` value.
+7. Copy `pluto.frm` and the edited `config.frm` to the root of the Pluto USB drive.
+8. Safely eject the Pluto USB drive. Do not disconnect the USB cable. The Pluto will process the firmware update and reboot.
+9. When the USB drive appears again, edit `config.txt` for any runtime settings you want, such as `[AD936X] force_2r2t = 1` or `[ACTIONS] device_persistent_keys = 1`.
+10. Safely eject the Pluto USB drive again and wait for it to reboot.
+11. After the device comes back up, physically disconnect and reconnect the USB cable. Use the Pluto normally with the jumper left on `USRT-MIO46`.
 
 ## Pluto Plus USB Reset Jumper
 
-For this Pluto Plus Ethernet/SD firmware, set the board jumper from `USRT-MIO52` to `USRT-MIO46` before booting the firmware.
+For this Pluto Plus Ethernet/SD firmware, the board must run with the USB reset jumper on `USRT-MIO46`.
 
 Standard Pluto-style firmware uses `MIO52` as the USB PHY reset signal. This Pluto Plus firmware enables the physical Ethernet controller, which uses `MIO52..MIO53` for Ethernet MDIO. Because `MIO52` is no longer available for USB reset, the firmware moves USB PHY reset to `MIO46`.
 
-If the jumper is left on `USRT-MIO52`, the firmware can boot far enough to light LEDs but USB may never enumerate. Typical symptoms are no D: drive, no normal USB gadget, and sometimes only forced DFU recovery appears. With this firmware, leave the jumper on `USRT-MIO46`. Move it back to `USRT-MIO52` only when returning to standard Pluto-style firmware that expects USB reset on `MIO52`.
+If the jumper is left on `USRT-MIO52`, the firmware can boot far enough to light LEDs but USB may never enumerate. Typical symptoms are no USB mass-storage drive, no normal USB gadget, and sometimes only forced DFU recovery appears. During the full DFU deployment procedure, start from `USRT-MIO52` only long enough to enter DFU with the existing boot path, then move the jumper to `USRT-MIO46` before running `FULL_DFU_UPDATE.bat`. Move it back to `USRT-MIO52` only when returning to standard Pluto-style firmware that expects USB reset on `MIO52`.
+
+## Pluto Plus 2R2T Test Mode
+
+Pluto Plus hardware with populated `TX1`, `RX1`, `TX2`, `RX2`, and clock connectors can be tested with the AD9361 2RX/2TX software path.
+
+Edit `config.txt` on the Pluto USB drive:
+
+```ini
+[AD936X]
+force_2r2t = 1
+attr_name = compatible
+attr_val = ad9361
+compatible = ad9361
+mode = 2r2t
+```
+
+After saving and ejecting the drive, reboot the Pluto Plus. `force_2r2t = 1` causes U-Boot to select the Rev.C FIT configuration (`config@8`) and to apply the AD9361/2R2T device-tree settings even if the hardware reference resistor reports a Rev.B-style model.
+
+Verify after reboot:
+
+```sh
+fw_printenv force_2r2t attr_name attr_val compatible mode
+cat /proc/device-tree/model
+dmesg | grep -iE 'ad936|9361|9364|2rx|2tx|cf-ad936'
+for d in /sys/bus/iio/devices/iio:device*; do
+  echo "== $d: $(cat $d/name 2>/dev/null) =="
+  ls $d 2>/dev/null | grep -E '^(in|out)_voltage[01]|out_altvoltage[01]' | sort
+done
+```
+
+Expected signs of success include `force_2r2t=1`, `attr_val=ad9361`, a Rev.C device-tree model, AD9361 probe messages, and IIO attributes for both channel `0` and channel `1` RF paths.
 
 If you want any `/mnt/jffs2` size other than the stock layout, install the matching `boot.frm` first. The boot image contains the U-Boot logic that applies the selected flash layout before Linux starts.
 
@@ -179,6 +230,8 @@ dfu-util -D uboot-env.dfu -a uboot-env.dfu
 dfu-util -D pluto.dfu -a firmware.dfu
 dfu-util -e
 ```
+
+On Windows, use `FULL_DFU_UPDATE.bat` from the firmware package directory to deploy the complete DFU set. It flashes `pluto.dfu`, `boot.dfu`, and `uboot-env.dfu`, then detaches the device. This is different from `RECOVER.bat`, which only rewrites the main firmware image.
 
 Use DFU carefully. Updating the bootloader or U-Boot environment incorrectly can make normal USB mass-storage recovery unavailable.
 
