@@ -14,6 +14,83 @@ The generated `config.txt` also includes `device_persistent_keys = 0` under `[AC
 
 ## Read This First
 
+## SD Card Boot Image For SD-Boot Pluto Boards
+
+Use this procedure for the newer Pluto-style boards that boot from a removable SD card and have boot DIP switches labeled `JTAG`, `SD`, and `OSPI`. This path does not require DFU mode, a DFU pushbutton, or MISO jumpers. Keep the original vendor SD card unchanged and write this image to a separate card.
+
+The GitHub release package includes a ready-to-burn SD-card image:
+
+```text
+release-packages/bakstaaj-v0.39-bakstaaj.1-release.zip
+  sdcard/bakstaaj-v0.39-bakstaaj.1-sdcard.img
+  sdcard/bakstaaj-v0.39-bakstaaj.1-sdcard-files.zip
+  sdcard/sdimg/
+```
+
+The raw `.img` is the preferred install method. It creates a small FAT32 boot partition containing the known-good OEM SD boot chain plus the Bakstaaj firmware payload:
+
+- `BOOT.bin`
+- `uEnv.txt`
+- `uImage`
+- `devicetree.dtb`
+- `uramdisk.image.gz`
+
+The SD package uses the OEM `BOOT.bin` and `uEnv.txt`, keeps the OEM-compatible device tree with the persistent JFFS2 partition patched to 5 MiB, and injects the dashboard-enabled root filesystem. The Pluto-hosted dashboard is available after boot at:
+
+```text
+http://192.168.2.1/dashboard.html
+```
+
+### Recommended Windows Burn Tools
+
+Recommended image writers:
+
+- Raspberry Pi Imager: simple, current, and works well for raw `.img` files.
+- balenaEtcher: straightforward burn-and-verify workflow.
+- Win32 Disk Imager: older but reliable for writing a raw image to a selected drive.
+
+Use the image writer's "write image" or "flash from file" option. Do not copy the `.img` file onto the SD card as a normal file; the writer must write the image to the card device.
+
+### Burn The SD Image
+
+1. Download the latest release ZIP from GitHub and extract it on your Windows computer.
+2. Insert a new SD card. Any normal 1 GB or larger card is enough; the boot image itself is small.
+3. Open Raspberry Pi Imager, balenaEtcher, or Win32 Disk Imager.
+4. Select `sdcard/bakstaaj-v0.39-bakstaaj.1-sdcard.img` from the extracted release.
+5. Select the SD card device. Double-check this carefully; the write operation overwrites the selected device.
+6. Write or flash the image, then let the tool finish its verify step if it offers one.
+7. Eject the SD card cleanly from Windows.
+8. Reinsert the card if you want to inspect it. Windows should show a small FAT32 volume containing `BOOT.bin`, `uEnv.txt`, `uImage`, `devicetree.dtb`, and `uramdisk.image.gz`.
+
+### Boot The Board
+
+1. Power the board off.
+2. Set the boot DIP switches to `SD`.
+3. Insert the newly written SD card.
+4. Connect the `JTAG` USB port to a serial terminal if you want boot logs. Use `115200 8N1`.
+5. Connect the `OTG` USB port for the normal Pluto USB gadget drive/network connection.
+6. Power the board on.
+
+Expected boot signs:
+
+- U-Boot reads `uEnv.txt`, `uImage`, `devicetree.dtb`, and `uramdisk.image.gz` from the SD card.
+- Linux sees the SD card as `mmcblk0`.
+- Windows sees the normal Pluto USB mass-storage drive on the OTG port.
+- The serial login banner reports `device-fw v0.39-bakstaaj.1`.
+- The dashboard loads at `http://192.168.2.1/dashboard.html` when USB networking is up.
+
+### Copy-Files Fallback
+
+If an image writer is not available, use the copy-files package only on a card that is already formatted as FAT32:
+
+1. Format a spare SD card as FAT32.
+2. Extract `sdcard/bakstaaj-v0.39-bakstaaj.1-sdcard-files.zip`.
+3. Copy the extracted files to the root of the SD card, not into a subdirectory.
+4. Verify that the card root contains `BOOT.bin`, `uEnv.txt`, `uImage`, `devicetree.dtb`, and `uramdisk.image.gz`.
+5. Eject the card cleanly before booting the Pluto board.
+
+The raw `.img` method is preferred because it also recreates the expected FAT boot volume layout. If the copy-files method does not boot, reburn the raw image.
+
 ## Recommended Full Deployment From DFU
 
 Use this procedure when installing this Pluto Plus Ethernet/SD firmware package from DFU. Keep the USB cable connected until the final reconnect step.
@@ -97,6 +174,10 @@ Typical release artifacts:
 | `uboot-env.dfu` | U-Boot environment image for DFU mode. |
 | `config.frm` | Editable install-time configuration file. Selects the `/mnt/jffs2` size. |
 | `plutosdr-fw-*.zip` | Firmware ZIP containing `pluto.frm`, `pluto.dfu`, `uboot-env.dfu`, and `config.frm`. |
+| `bakstaaj-v*-release.zip` | Complete Bakstaaj release package containing DFU, USB mass-storage, and SD-card boot artifacts. |
+| `sdcard/bakstaaj-v*-sdcard.img` | Preferred raw SD-card boot image for SD-boot Pluto boards. |
+| `sdcard/bakstaaj-v*-sdcard-files.zip` | FAT32 copy-files fallback for SD boot. |
+| `sdcard/sdimg/` | Expanded SD boot files used to build the image and copy-files ZIP. |
 
 ## JFFS2 Size Options
 
