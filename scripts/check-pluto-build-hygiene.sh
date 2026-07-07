@@ -7,15 +7,22 @@ files=(
 	buildroot/board/pluto/S40network
 	buildroot/board/pluto/S41network
 	buildroot/board/pluto/S50dropbear
+	buildroot/board/pluto/S98autostart
 	buildroot/board/pluto/device_persistent_keys
 	buildroot/board/pluto/ifupdown.sh
 	buildroot/board/pluto/post-build.sh
+	buildroot/board/pluto/pluto-sdcard-prepare
 	buildroot/board/pluto/update.sh
 	buildroot/board/pluto/update_frm.sh
 	buildroot/board/pluto/msd/config.frm
 	buildroot/board/pluto/mdev.conf
 	buildroot/board/pluto/automounter.sh
 	buildroot/board/pluto/pluto-eth-fallback
+	buildroot/package/Config.in
+	buildroot/package/python-sgp4/Config.in
+	buildroot/package/python-sgp4/python-sgp4.hash
+	buildroot/package/python-sgp4/python-sgp4.mk
+	buildroot/configs/zynq_pluto_defconfig
 	linux/arch/arm/boot/dts/zynq-pluto-sdr.dtsi
 	linux/arch/arm/configs/zynq_pluto_defconfig
 	u-boot-xlnx/include/configs/zynq-common.h
@@ -31,8 +38,10 @@ sh_bin="$tool_dir/sh"
 "$sh_bin" -n buildroot/board/pluto/S40network
 "$sh_bin" -n buildroot/board/pluto/S41network
 "$sh_bin" -n buildroot/board/pluto/S50dropbear
+"$sh_bin" -n buildroot/board/pluto/S98autostart
 "$sh_bin" -n buildroot/board/pluto/device_persistent_keys
 "$sh_bin" -n buildroot/board/pluto/ifupdown.sh
+"$sh_bin" -n buildroot/board/pluto/pluto-sdcard-prepare
 "$sh_bin" -n buildroot/board/pluto/update.sh
 "$sh_bin" -n buildroot/board/pluto/pluto-eth-fallback
 

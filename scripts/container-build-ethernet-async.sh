@@ -36,15 +36,22 @@ patched_files=(
 	buildroot/board/pluto/S40network \
 	buildroot/board/pluto/S41network \
 	buildroot/board/pluto/S50dropbear \
+	buildroot/board/pluto/S98autostart \
 	buildroot/board/pluto/device_persistent_keys \
 	buildroot/board/pluto/ifupdown.sh \
 	buildroot/board/pluto/post-build.sh \
+	buildroot/board/pluto/pluto-sdcard-prepare \
 	buildroot/board/pluto/update.sh \
 	buildroot/board/pluto/update_frm.sh \
 	buildroot/board/pluto/msd/config.frm \
 	buildroot/board/pluto/mdev.conf \
 	buildroot/board/pluto/automounter.sh \
 	buildroot/board/pluto/pluto-eth-fallback \
+	buildroot/package/Config.in \
+	buildroot/package/python-sgp4/Config.in \
+	buildroot/package/python-sgp4/python-sgp4.hash \
+	buildroot/package/python-sgp4/python-sgp4.mk \
+	buildroot/configs/zynq_pluto_defconfig \
 	linux/arch/arm/boot/dts/zynq-pluto-sdr.dtsi \
 	linux/arch/arm/configs/zynq_pluto_defconfig \
 	u-boot-xlnx/include/configs/zynq-common.h
@@ -56,15 +63,23 @@ copy_from_host buildroot/board/pluto/S21misc
 copy_from_host buildroot/board/pluto/S40network
 copy_from_host buildroot/board/pluto/S41network
 copy_from_host buildroot/board/pluto/S50dropbear
+copy_from_host buildroot/board/pluto/S98autostart
 copy_from_host buildroot/board/pluto/device_persistent_keys
 copy_from_host buildroot/board/pluto/ifupdown.sh
 copy_from_host buildroot/board/pluto/post-build.sh
+copy_from_host buildroot/board/pluto/pluto-sdcard-prepare
 copy_from_host buildroot/board/pluto/update.sh
 copy_from_host buildroot/board/pluto/update_frm.sh
 copy_from_host buildroot/board/pluto/msd/config.frm
 copy_from_host buildroot/board/pluto/mdev.conf
 copy_from_host buildroot/board/pluto/automounter.sh
 copy_from_host buildroot/board/pluto/pluto-eth-fallback
+mkdir -p buildroot/package/python-sgp4
+copy_from_host buildroot/package/Config.in
+copy_from_host buildroot/package/python-sgp4/Config.in
+copy_from_host buildroot/package/python-sgp4/python-sgp4.hash
+copy_from_host buildroot/package/python-sgp4/python-sgp4.mk
+copy_from_host buildroot/configs/zynq_pluto_defconfig
 copy_from_host linux/arch/arm/boot/dts/zynq-pluto-sdr.dtsi
 copy_from_host linux/arch/arm/configs/zynq_pluto_defconfig
 copy_from_host u-boot-xlnx/include/configs/zynq-common.h
@@ -86,8 +101,10 @@ chmod +x \
 	buildroot/board/pluto/S40network \
 	buildroot/board/pluto/S41network \
 	buildroot/board/pluto/S50dropbear \
+	buildroot/board/pluto/S98autostart \
 	buildroot/board/pluto/device_persistent_keys \
 	buildroot/board/pluto/ifupdown.sh \
+	buildroot/board/pluto/pluto-sdcard-prepare \
 	buildroot/board/pluto/update.sh \
 	buildroot/board/pluto/update_frm.sh \
 	buildroot/board/pluto/automounter.sh \
@@ -283,6 +300,14 @@ RF / hostname / keys:
 - config.txt includes device_persistent_keys = 0 under [ACTIONS]. Setting it
   to 1 manually refreshes persisted Dropbear keys and writes
   PERSISTENT_KEYS_STATUS.
+- ext4 is recommended for SD card application storage. e2fsck supports
+  ext2/3/4 repair, while fsck.vfat remains available for FAT compatibility.
+  Cards are checked before mount and before /mnt/jffs2/autorun.sh. Startup
+  repair and autorun run in the background so checks cannot block normal boot.
+- python3 is included in the root filesystem for local application scripts.
+- python-sgp4 2.24 is included for local TLE/orbit propagation workflows.
+- Physical Ethernet uses a stable default MAC address of 00:0a:35:00:01:22.
+  It can be changed with macaddr_eth in config.txt before ejecting the drive.
 
 DFU loader:
 - FULL_DFU_UPDATE.bat flashes pluto.dfu, boot.dfu, and uboot-env.dfu from a
