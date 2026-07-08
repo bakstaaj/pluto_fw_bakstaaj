@@ -25,6 +25,16 @@ copy_from_host() {
 	cp "$src" "$dst"
 }
 
+copy_tree_from_host() {
+	local rel="$1"
+	local src="$host_dir/$rel"
+	local dst="$rel"
+
+	rm -rf "$dst"
+	mkdir -p "$(dirname "$dst")"
+	cp -a "$src" "$dst"
+}
+
 git config --global --add safe.directory /work/src
 git config --global --add safe.directory /work/src/buildroot
 git config --global --add safe.directory /work/src/linux
@@ -36,11 +46,29 @@ patched_files=(
 	buildroot/board/pluto/S40network \
 	buildroot/board/pluto/S41network \
 	buildroot/board/pluto/S50dropbear \
+	buildroot/board/pluto/S70pluto-radio-api \
 	buildroot/board/pluto/S98autostart \
 	buildroot/board/pluto/device_persistent_keys \
 	buildroot/board/pluto/ifupdown.sh \
 	buildroot/board/pluto/post-build.sh \
 	buildroot/board/pluto/pluto-sdcard-prepare \
+	buildroot/board/pluto/pluto-web-apply-settings \
+	buildroot/board/pluto/pluto-radio-api \
+	buildroot/board/pluto/pluto-audio-backend \
+	buildroot/board/pluto/pluto-audio-dsp/pluto-audio-backend.c \
+	buildroot/board/pluto/pluto-audio-dsp/pluto-loopback-backend.c \
+	buildroot/board/pluto/pluto-audio-sim-backend \
+	buildroot/board/pluto/pluto-doppler-worker \
+	buildroot/board/pluto/pluto-radio/profiles/FM_BROADCAST_WFM.json \
+	buildroot/board/pluto/pluto-radio/profiles/IQ_CAPTURE.json \
+	buildroot/board/pluto/pluto-radio/profiles/LOOPBACK_TEST.json \
+	buildroot/board/pluto/pluto-radio/profiles/NOAA_NFM.json \
+	buildroot/board/pluto/pluto-radio/profiles/SAT_AUDIO_NFM.json \
+	buildroot/board/pluto/pluto-radio/profiles/SAT_CW.json \
+	buildroot/board/pluto/pluto-radio/profiles/TX_AUDIO_AM.json \
+	buildroot/board/pluto/pluto-radio/profiles/TX_AUDIO_FM.json \
+	buildroot/board/pluto/pluto-radio/profiles/TX_CW.json \
+	buildroot/board/pluto/pluto-radio/profiles/TX_TEST_TONE.json \
 	buildroot/board/pluto/update.sh \
 	buildroot/board/pluto/update_frm.sh \
 	buildroot/board/pluto/msd/config.frm \
@@ -48,6 +76,9 @@ patched_files=(
 	buildroot/board/pluto/automounter.sh \
 	buildroot/board/pluto/pluto-eth-fallback \
 	buildroot/package/Config.in \
+	buildroot/package/liquid-dsp/liquid-dsp.mk \
+	buildroot/package/pluto-audio-dsp/Config.in \
+	buildroot/package/pluto-audio-dsp/pluto-audio-dsp.mk \
 	buildroot/package/python-sgp4/Config.in \
 	buildroot/package/python-sgp4/python-sgp4.hash \
 	buildroot/package/python-sgp4/python-sgp4.mk \
@@ -63,19 +94,44 @@ copy_from_host buildroot/board/pluto/S21misc
 copy_from_host buildroot/board/pluto/S40network
 copy_from_host buildroot/board/pluto/S41network
 copy_from_host buildroot/board/pluto/S50dropbear
+copy_from_host buildroot/board/pluto/S70pluto-radio-api
 copy_from_host buildroot/board/pluto/S98autostart
 copy_from_host buildroot/board/pluto/device_persistent_keys
 copy_from_host buildroot/board/pluto/ifupdown.sh
 copy_from_host buildroot/board/pluto/post-build.sh
 copy_from_host buildroot/board/pluto/pluto-sdcard-prepare
+copy_from_host buildroot/board/pluto/pluto-web-apply-settings
+copy_from_host buildroot/board/pluto/pluto-radio-api
+copy_from_host buildroot/board/pluto/pluto-audio-backend
+mkdir -p buildroot/board/pluto/pluto-audio-dsp
+copy_from_host buildroot/board/pluto/pluto-audio-dsp/pluto-audio-backend.c
+copy_from_host buildroot/board/pluto/pluto-audio-dsp/pluto-loopback-backend.c
+copy_from_host buildroot/board/pluto/pluto-audio-sim-backend
+copy_from_host buildroot/board/pluto/pluto-doppler-worker
+mkdir -p buildroot/board/pluto/pluto-radio/profiles
+copy_from_host buildroot/board/pluto/pluto-radio/profiles/FM_BROADCAST_WFM.json
+copy_from_host buildroot/board/pluto/pluto-radio/profiles/IQ_CAPTURE.json
+copy_from_host buildroot/board/pluto/pluto-radio/profiles/LOOPBACK_TEST.json
+copy_from_host buildroot/board/pluto/pluto-radio/profiles/NOAA_NFM.json
+copy_from_host buildroot/board/pluto/pluto-radio/profiles/SAT_AUDIO_NFM.json
+copy_from_host buildroot/board/pluto/pluto-radio/profiles/SAT_CW.json
+copy_from_host buildroot/board/pluto/pluto-radio/profiles/TX_AUDIO_AM.json
+copy_from_host buildroot/board/pluto/pluto-radio/profiles/TX_AUDIO_FM.json
+copy_from_host buildroot/board/pluto/pluto-radio/profiles/TX_CW.json
+copy_from_host buildroot/board/pluto/pluto-radio/profiles/TX_TEST_TONE.json
 copy_from_host buildroot/board/pluto/update.sh
 copy_from_host buildroot/board/pluto/update_frm.sh
 copy_from_host buildroot/board/pluto/msd/config.frm
 copy_from_host buildroot/board/pluto/mdev.conf
 copy_from_host buildroot/board/pluto/automounter.sh
 copy_from_host buildroot/board/pluto/pluto-eth-fallback
+copy_tree_from_host buildroot/board/pluto/web
+mkdir -p buildroot/package/pluto-audio-dsp
 mkdir -p buildroot/package/python-sgp4
 copy_from_host buildroot/package/Config.in
+copy_from_host buildroot/package/liquid-dsp/liquid-dsp.mk
+copy_from_host buildroot/package/pluto-audio-dsp/Config.in
+copy_from_host buildroot/package/pluto-audio-dsp/pluto-audio-dsp.mk
 copy_from_host buildroot/package/python-sgp4/Config.in
 copy_from_host buildroot/package/python-sgp4/python-sgp4.hash
 copy_from_host buildroot/package/python-sgp4/python-sgp4.mk
@@ -101,10 +157,16 @@ chmod +x \
 	buildroot/board/pluto/S40network \
 	buildroot/board/pluto/S41network \
 	buildroot/board/pluto/S50dropbear \
+	buildroot/board/pluto/S70pluto-radio-api \
 	buildroot/board/pluto/S98autostart \
 	buildroot/board/pluto/device_persistent_keys \
 	buildroot/board/pluto/ifupdown.sh \
 	buildroot/board/pluto/pluto-sdcard-prepare \
+	buildroot/board/pluto/pluto-web-apply-settings \
+	buildroot/board/pluto/pluto-radio-api \
+	buildroot/board/pluto/pluto-audio-backend \
+	buildroot/board/pluto/pluto-audio-sim-backend \
+	buildroot/board/pluto/pluto-doppler-worker \
 	buildroot/board/pluto/update.sh \
 	buildroot/board/pluto/update_frm.sh \
 	buildroot/board/pluto/automounter.sh \
@@ -138,6 +200,18 @@ fi
 cp "$source_frm" "$asset_dir/pluto-plus-source.frm"
 cp build/boot.frm "$asset_dir/boot.frm"
 cp build/boot.dfu "$asset_dir/boot.dfu"
+
+make -C buildroot ARCH=arm "zynq_${target_name}_defconfig"
+if ! grep -q '^BR2_PACKAGE_FFTW_SINGLE=y$' buildroot/.config; then
+	echo "BR2_PACKAGE_FFTW_SINGLE is disabled; rebuilding liquid-dsp/pluto-audio-dsp without stale FFTW-single artifacts"
+	rm -rf \
+		buildroot/output/build/liquid-dsp-1.4.0 \
+		buildroot/output/build/pluto-audio-dsp \
+		buildroot/output/build/fftw-single-* \
+		buildroot/output/target/usr/lib/libfftw3f* \
+		buildroot/output/host/arm-buildroot-linux-gnueabihf/sysroot/usr/lib/libfftw3f* \
+		buildroot/output/host/arm-buildroot-linux-gnueabihf/sysroot/usr/lib/pkgconfig/fftw3f.pc
+fi
 
 if [ -f "$asset_dir/system_top.bit" ] && [ "${REFRESH_BIT:-0}" != "1" ]; then
 	cp "$asset_dir/system_top.bit" build/system_top.bit

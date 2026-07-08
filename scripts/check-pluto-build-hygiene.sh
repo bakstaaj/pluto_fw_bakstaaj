@@ -7,6 +7,7 @@ files=(
 	buildroot/board/pluto/S40network
 	buildroot/board/pluto/S41network
 	buildroot/board/pluto/S50dropbear
+	buildroot/board/pluto/S70pluto-radio-api
 	buildroot/board/pluto/S98autostart
 	buildroot/board/pluto/device_persistent_keys
 	buildroot/board/pluto/ifupdown.sh
@@ -18,11 +19,31 @@ files=(
 	buildroot/board/pluto/mdev.conf
 	buildroot/board/pluto/automounter.sh
 	buildroot/board/pluto/pluto-eth-fallback
+	buildroot/board/pluto/pluto-radio-api
+	buildroot/board/pluto/pluto-audio-backend
+	buildroot/board/pluto/pluto-audio-dsp/pluto-audio-backend.c
+	buildroot/board/pluto/pluto-audio-dsp/pluto-loopback-backend.c
+	buildroot/board/pluto/pluto-audio-sim-backend
+	buildroot/board/pluto/pluto-doppler-worker
+	buildroot/board/pluto/pluto-radio/profiles/*.json
+	buildroot/board/pluto/web/api-test.html
+	buildroot/board/pluto/web/dashboard.html
+	buildroot/board/pluto/web/img/pluto-api-test.js
+	buildroot/board/pluto/web/img/pluto-dashboard.css
+	buildroot/package/pluto-audio-dsp/Config.in
+	buildroot/package/pluto-audio-dsp/pluto-audio-dsp.mk
+	buildroot/package/liquid-dsp/liquid-dsp.mk
+	scripts/validate-pluto-radio-api.sh
+	scripts/check-firmware-size-budget.py
+	examples/README.md
+	examples/python/pluto_radio_client.py
+	examples/browser/pluto-radio-client.html
 	buildroot/package/Config.in
 	buildroot/package/python-sgp4/Config.in
 	buildroot/package/python-sgp4/python-sgp4.hash
 	buildroot/package/python-sgp4/python-sgp4.mk
 	buildroot/configs/zynq_pluto_defconfig
+	docs/firmware-api-contract.md
 	linux/arch/arm/boot/dts/zynq-pluto-sdr.dtsi
 	linux/arch/arm/configs/zynq_pluto_defconfig
 	u-boot-xlnx/include/configs/zynq-common.h
@@ -32,18 +53,30 @@ bash_bin="${BASH:-bash}"
 tool_dir="${bash_bin%/*}"
 export PATH="$tool_dir:$PATH"
 sh_bin="$tool_dir/sh"
+python_bin="${PYTHON:-python3}"
+if ! command -v "$python_bin" >/dev/null 2>&1; then
+	python_bin=python
+fi
 
 "$bash_bin" -n scripts/container-build-ethernet-async.sh
 "$sh_bin" -n buildroot/board/pluto/S21misc
 "$sh_bin" -n buildroot/board/pluto/S40network
 "$sh_bin" -n buildroot/board/pluto/S41network
 "$sh_bin" -n buildroot/board/pluto/S50dropbear
+"$sh_bin" -n buildroot/board/pluto/S70pluto-radio-api
 "$sh_bin" -n buildroot/board/pluto/S98autostart
 "$sh_bin" -n buildroot/board/pluto/device_persistent_keys
 "$sh_bin" -n buildroot/board/pluto/ifupdown.sh
 "$sh_bin" -n buildroot/board/pluto/pluto-sdcard-prepare
 "$sh_bin" -n buildroot/board/pluto/update.sh
 "$sh_bin" -n buildroot/board/pluto/pluto-eth-fallback
+"$bash_bin" -n scripts/validate-pluto-radio-api.sh
+"$python_bin" -m py_compile buildroot/board/pluto/pluto-radio-api
+"$python_bin" -m py_compile buildroot/board/pluto/pluto-audio-backend
+"$python_bin" -m py_compile buildroot/board/pluto/pluto-audio-sim-backend
+"$python_bin" -m py_compile scripts/check-firmware-size-budget.py
+"$python_bin" -m py_compile examples/python/pluto_radio_client.py
+"$sh_bin" -n buildroot/board/pluto/pluto-doppler-worker
 
 crlf_report=".check-pluto-build-hygiene.crlf.$$"
 : > "$crlf_report"

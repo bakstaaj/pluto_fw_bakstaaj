@@ -325,14 +325,14 @@ def write_hashes(release_dir: Path) -> None:
     write_file(release_dir / "SHA256SUMS.txt", ("\n".join(lines) + "\n").encode("utf-8"))
 
 
-def write_readme(release_dir: Path, version: str) -> None:
+def write_readme(release_dir: Path, version: str, source_dir: Path) -> None:
+    source_label = source_dir.name
     text = f"""bakStaaJ Pluto Firmware Release
 
 Version: {version}
 
-This package is assembled from the known-good Pluto firmware payload in
-build-large-jffs3-sdcard-ethernet-pluto-plus, with the dashboard files and
-version string injected into the initramfs.
+This package is assembled from the locally built Pluto firmware payload in
+{source_label}, with the release version string injected into the initramfs.
 
 Firmware update files:
 - firmware/pluto.frm
@@ -359,8 +359,7 @@ Version source:
 - /opt/VERSIONS contains: device-fw {version}
 
 Notes:
-- This release was assembled locally without rerunning the full Vivado/Buildroot
-  Docker build, because WSL has no installed Linux distribution on this machine.
+- This release was assembled from a completed Docker firmware build.
 - The .frm/.dfu files are generated from a patched FIT image so they share the
   same dashboard-enabled rootfs and version string.
 """
@@ -425,7 +424,7 @@ def main() -> None:
     fat32_files = make_fat32_sd_files(sd_files)
     make_fat32_image(fat32_files, sdcard_dir / f"bakstaaj-{args.version}-sdcard.img", args.sd_image_mib)
 
-    write_readme(release_dir, args.version)
+    write_readme(release_dir, args.version, source_dir)
     write_hashes(release_dir)
     release_zip = release_dir.parent / f"bakstaaj-{args.version}-release.zip"
     zip_dir(release_dir, release_zip)

@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pluto Radio Sample Client</title>
+<style>
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #f7f8fa;
+  color: #15171a;
+}
+main {
+  max-width: 920px;
+  margin: 0 auto;
+  padding: 24px;
+}
+h1 {
+  margin: 0 0 16px;
+  font-size: 28px;
+}
+section {
+  margin: 16px 0;
+  padding: 16px;
+  border: 1px solid #d7dce2;
+  border-radius: 8px;
+  background: #fff;
+}
+label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+input, select, button {
+  font: inherit;
+}
+input, select {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px;
+  border: 1px solid #b8c0ca;
+  border-radius: 6px;
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
+}
+button {
+  padding: 9px 12px;
+  border: 1px solid #2f6ebc;
+  border-radius: 6px;
+  background: #2f6ebc;
+  color: #fff;
+  cursor: pointer;
+}
+button.secondary {
+  background: #fff;
+  color: #2f6ebc;
+}
+pre {
+  min-height: 220px;
+  overflow: auto;
+  padding: 12px;
+  border-radius: 8px;
+  background: #111827;
+  color: #e5e7eb;
+}
+</style>
+</head>
+<body>
+<main>
+  <h1>Pluto Radio Sample Client</h1>
+  <section>
+    <label for="baseUrl">Pluto base URL</label>
+    <input id="baseUrl" value="http://192.168.2.1">
+  </section>
+  <section>
+    <div class="grid">
+      <button data-action="health">Health</button>
+      <button data-action="profiles">Profiles</button>
+      <button data-action="self-test">Safe Self Test</button>
+      <button data-action="calibration">Calibration</button>
+      <button data-action="guardrails">TX Guardrails</button>
+      <button data-action="audio">Sim Audio</button>
+      <button data-action="loopback">Sim Loopback</button>
+      <button data-action="tx-tone">Sim TX Tone</button>
+      <button data-action="tx-am">Sim TX AM</button>
+      <button data-action="tx-fm">Sim TX FM</button>
+      <button data-action="tx-cw">Sim TX CW</button>
+      <button class="secondary" data-action="audio-stop">Stop Audio</button>
+      <button class="secondary" data-action="tx-stop">Stop TX</button>
+    </div>
+  </section>
+  <section>
+    <label for="profile">TX profile for guardrail checks</label>
+    <select id="profile">
+      <option>TX_TEST_TONE</option>
+      <option>TX_AUDIO_AM</option>
+      <option>TX_AUDIO_FM</option>
+      <option>TX_CW</option>
+    </select>
+  </section>
+  <section>
+    <pre id="output">{}</pre>
+  </section>
+</main>
+<script>
+const apiPath = "/cgi-bin/pluto-radio-api";
+
+function endpoint(path) {
+  const baseUrl = document.getElementById("baseUrl").value.replace(/\/+$/, "");
+  return `${baseUrl}${apiPath}?path=${encodeURIComponent(path)}`;
+}
+
+function output(payload) {
+  document.getElementById("output").textContent = JSON.stringify(payload, null, 2);
+}
+
+async function callApi(method, path, payload) {
+  const options = { method, cache: "no-store", headers: { Accept: "application/json" } };
+  if (method !== "GET") {
+    options.headers["Content-Type"] = "application/json";
+    options.body = JSON.stringify(payload || {});
+  }
+  const response = await fetch(endpoint(path), options);
+  const text = await response.text();
+  let data;
+  try {
+    data = JSON.parse(text || "{}");
+  } catch (error) {
+    data = { ok: false, error: { code: "invalid_json_response", message: text || error.message } };
+  }
+  output(data);
+}
+
+function txPayload(profile) {
+  return { profile, simulate: true, duration_seconds: 1 };
+}
+
+const actions = {
+  health: () => callApi("GET", "/system/health"),
+  profiles: () => callApi("GET", "/radio/profile/list"),
+  "self-test": () => callApi("POST", "/system/self-test", {}),
+  calibration: () => callApi("GET", "/radio/calibration/status"),
+  guardrails: () => callApi("POST", "/radio/tx/guardrails", txPayload(document.getElementById("profile").value)),
+  audio: () => callApi("POST", "/radio/audio/start", { profile: "NOAA_NFM", simulate: true }),
+  "audio-stop": () => callApi("POST", "/radio/audio/stop", {}),
+  loopback: () => callApi("POST", "/radio/loopback/start", { profile: "LOOPBACK_TEST", simulate: true, duration_seconds: 1 }),
+  "tx-tone": () => callApi("POST", "/radio/tx/start", txPayload("TX_TEST_TONE")),
+  "tx-am": () => callApi("POST", "/radio/tx/start", txPayload("TX_AUDIO_AM")),
+  "tx-fm": () => callApi("POST", "/radio/tx/start", { ...txPayload("TX_AUDIO_FM"), tx_audio_tone_hz: 1200 }),
+  "tx-cw": () => callApi("POST", "/radio/tx/start", { ...txPayload("TX_CW"), tx_cw_text: "CQ TEST" }),
+  "tx-stop": () => callApi("POST", "/radio/tx/stop", {}),
+};
+
+document.querySelectorAll("[data-action]").forEach(button => {
+  button.addEventListener("click", () => actions[button.dataset.action]());
+});
+</script>
+</body>
+</html>

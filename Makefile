@@ -229,6 +229,10 @@ ifneq (1, ${SKIP_LEGAL})
 	tar czvf build/legal-info-$(VERSION).tar.gz -C buildroot/output legal-info
 endif
 
+size-check:
+	python3 scripts/check-firmware-size-budget.py
+
+.PHONY: size-check
 
 git-update-all:
 	git submodule update --recursive --remote
