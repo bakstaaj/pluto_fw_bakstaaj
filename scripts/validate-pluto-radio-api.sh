@@ -56,6 +56,10 @@ assert controls["dc_block"] is False'
 "$python_bin" "$api" capture-start IQ_CAPTURE --simulate >/dev/null
 "$python_bin" "$api" spectrum-snapshot IQ_CAPTURE --simulate >/dev/null
 "$python_bin" "$api" spectrum-top IQ_CAPTURE --simulate >/dev/null
+REQUEST_METHOD=GET QUERY_STRING='path=/radio/spectrum/snapshot&profile=IQ_CAPTURE&frequency_hz=162550000&bins=64&simulate=true' \
+	"$python_bin" "$api" >/dev/null
+REQUEST_METHOD=GET QUERY_STRING='path=/radio/spectrum/top&profile=IQ_CAPTURE&frequency_hz=162550000&top_n=3&simulate=true' \
+	"$python_bin" "$api" >/dev/null
 "$python_bin" "$api" loopback-start LOOPBACK_TEST --simulate >/dev/null
 "$python_bin" "$api" tx-start TX_TEST_TONE --simulate >/dev/null
 "$python_bin" "$api" tx-start TX_TEST_TONE --simulate tx_mode=carrier >/dev/null

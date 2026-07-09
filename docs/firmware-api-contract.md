@@ -156,6 +156,8 @@ Spectrum:
 
 ```text
 GET  /radio/spectrum/status
+GET  /radio/spectrum/snapshot
+GET  /radio/spectrum/top
 POST /radio/spectrum/snapshot
 POST /radio/spectrum/top
 ```
@@ -510,6 +512,7 @@ Use SD-card storage under `/media` for larger captures.
 
 ## Spectrum
 
+`GET /radio/spectrum/snapshot`
 `POST /radio/spectrum/snapshot`
 
 Request:
@@ -527,6 +530,7 @@ Request:
 
 Returns bounded spectrum points and peak information.
 
+`GET /radio/spectrum/top`
 `POST /radio/spectrum/top`
 
 Uses the same input but returns only the peak list. Apps should use this when
