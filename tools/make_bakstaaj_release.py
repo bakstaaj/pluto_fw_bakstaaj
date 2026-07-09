@@ -15,7 +15,7 @@ import zlib
 from pathlib import Path
 
 import make_oem_sdcard_package as oem
-from make_plutoplus_sdcard_image import make_fat32_image
+from make_plutoplus_sdcard_image import make_fat32_ext4_image
 
 
 FDT_MAGIC = 0xD00DFEED
@@ -350,7 +350,11 @@ SD boot files:
 
 For the new SD-boot board, use the SD-card files or image. The SD boot package
 keeps the OEM BOOT.bin and uEnv.txt boot chain, uses the OEM DTB with qspi-nvmfs
-patched to 5 MiB, and injects the dashboard-enabled rootfs.
+patched to 5 MiB, and injects the dashboard-enabled rootfs. The raw SD image
+contains a 100 MiB FAT32 boot partition followed by a 100 MiB Linux/ext4 data
+partition labeled PLUTO_DATA. On first boot the firmware mounts the data
+partition at /media and can expand it to the remaining physical SD-card
+capacity.
 
 Dashboard:
 - http://192.168.2.1/dashboard.html
@@ -373,7 +377,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--source-dir", type=Path, default=Path("build-large-jffs3-sdcard-ethernet-pluto-plus"))
     parser.add_argument("--oem-dir", type=Path, default=Path(r"C:\tmp\oem-pluto-sd"))
     parser.add_argument("--out-dir", type=Path, default=None)
-    parser.add_argument("--sd-image-mib", type=int, default=64)
+    parser.add_argument("--sd-image-mib", type=int, default=201)
+    parser.add_argument("--sd-boot-mib", type=int, default=100)
     return parser.parse_args()
 
 
@@ -422,7 +427,12 @@ def main() -> None:
     sd_files_zip = sdcard_dir / f"bakstaaj-{args.version}-sdcard-files.zip"
     zip_dir(sdimg_dir, sd_files_zip)
     fat32_files = make_fat32_sd_files(sd_files)
-    make_fat32_image(fat32_files, sdcard_dir / f"bakstaaj-{args.version}-sdcard.img", args.sd_image_mib)
+    make_fat32_ext4_image(
+        fat32_files,
+        sdcard_dir / f"bakstaaj-{args.version}-sdcard.img",
+        image_mib=args.sd_image_mib,
+        boot_mib=args.sd_boot_mib,
+    )
 
     write_readme(release_dir, args.version, source_dir)
     write_hashes(release_dir)

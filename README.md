@@ -27,7 +27,7 @@ release-packages/bakstaaj-v0.39-bakstaaj.2b-release.zip
   sdcard/sdimg/
 ```
 
-The raw `.img` is the preferred install method. It creates a small FAT32 boot partition containing the known-good OEM SD boot chain plus the Bakstaaj firmware payload:
+The raw `.img` is the preferred install method. It creates a 100 MiB FAT32 boot partition containing the known-good OEM SD boot chain plus the Bakstaaj firmware payload, followed by a 100 MiB ext4 data partition labeled `PLUTO_DATA`:
 
 - `BOOT.bin`
 - `uEnv.txt`
@@ -36,6 +36,8 @@ The raw `.img` is the preferred install method. It creates a small FAT32 boot pa
 - `uramdisk.image.gz`
 
 The SD package uses the OEM `BOOT.bin` and `uEnv.txt`, keeps the OEM-compatible device tree with the persistent JFFS2 partition patched to 5 MiB, and injects the dashboard-enabled root filesystem. The Pluto-hosted dashboard is available after boot at:
+
+On first boot, the firmware skips the FAT32 boot partition, mounts the second SD partition at `/media`, and expands the ext4 filesystem to the remaining physical SD-card capacity when the card is larger than the shipped image.
 
 ```text
 http://192.168.2.1/dashboard.html

@@ -19,6 +19,8 @@ import lzma
 import math
 import os
 import struct
+import subprocess
+import tempfile
 import time
 import urllib.request
 import zipfile
@@ -299,10 +301,38 @@ def make_dir_entry(name: str, start_cluster: int, size: int) -> bytes:
     )
 
 
-def make_fat32_image(files: dict[str, bytes], image_path: Path, image_mib: int) -> None:
-    partition_start = 2048
-    total_sectors = image_mib * 1024 * 1024 // SECTOR_SIZE
-    partition_sectors = total_sectors - partition_start
+def write_mbr_partition(
+    image: bytearray,
+    index: int,
+    *,
+    bootable: bool,
+    partition_type: int,
+    start_sector: int,
+    sector_count: int,
+) -> None:
+    if not 1 <= index <= 4:
+        raise ValueError("MBR partition index must be 1..4")
+    mbr_entry = struct.pack(
+        "<B3sB3sII",
+        0x80 if bootable else 0x00,
+        b"\x00\x02\x00",
+        partition_type,
+        b"\xff\xff\xff",
+        start_sector,
+        sector_count,
+    )
+    offset = 446 + ((index - 1) * 16)
+    image[offset : offset + 16] = mbr_entry
+    image[510:512] = b"\x55\xaa"
+
+
+def write_fat32_partition(
+    image: bytearray,
+    files: dict[str, bytes],
+    *,
+    partition_start: int,
+    partition_sectors: int,
+) -> None:
     reserved_sectors = 32
     sectors_per_cluster = 1
     num_fats = 2
@@ -326,22 +356,6 @@ def make_fat32_image(files: dict[str, bytes], image_path: Path, image_mib: int) 
     if needed_clusters + 2 > cluster_count:
         raise ValueError("Image is too small for requested files")
 
-    image = bytearray(total_sectors * SECTOR_SIZE)
-
-    # MBR
-    partition_size = partition_sectors
-    mbr_entry = struct.pack(
-        "<B3sB3sII",
-        0x80,
-        b"\x00\x02\x00",
-        0x0C,
-        b"\xff\xff\xff",
-        partition_start,
-        partition_size,
-    )
-    image[446:462] = mbr_entry
-    image[510:512] = b"\x55\xaa"
-
     volume_id = int(time.time()) & 0xFFFFFFFF
     boot = bytearray(SECTOR_SIZE)
     boot[0:3] = b"\xeb\x58\x90"
@@ -357,7 +371,7 @@ def make_fat32_image(files: dict[str, bytes], image_path: Path, image_mib: int) 
     struct.pack_into("<H", boot, 24, 63)
     struct.pack_into("<H", boot, 26, 255)
     struct.pack_into("<I", boot, 28, partition_start)
-    struct.pack_into("<I", boot, 32, partition_size)
+    struct.pack_into("<I", boot, 32, partition_sectors)
     struct.pack_into("<I", boot, 36, fat_sectors)
     struct.pack_into("<H", boot, 40, 0)
     struct.pack_into("<H", boot, 42, 0)
@@ -422,7 +436,87 @@ def make_fat32_image(files: dict[str, bytes], image_path: Path, image_mib: int) 
         start = fat_offset + fat_idx * fat_sectors * SECTOR_SIZE
         image[start : start + len(fat)] = fat
 
+
+def make_ext4_image(size_bytes: int, label: str) -> bytes:
+    with tempfile.TemporaryDirectory(prefix="pluto-ext4-") as tmp:
+        image_path = Path(tmp) / "data.ext4"
+        subprocess.run(
+            [
+                "mke2fs",
+                "-q",
+                "-t",
+                "ext4",
+                "-L",
+                label,
+                "-m",
+                "0",
+                "-O",
+                "^64bit",
+                "-F",
+                str(image_path),
+                str(size_bytes // 1024),
+            ],
+            check=True,
+        )
+        return read_file(image_path)
+
+
+def make_fat32_image(files: dict[str, bytes], image_path: Path, image_mib: int) -> None:
+    partition_start = 2048
+    total_sectors = image_mib * 1024 * 1024 // SECTOR_SIZE
+    partition_sectors = total_sectors - partition_start
+    image = bytearray(total_sectors * SECTOR_SIZE)
+    write_mbr_partition(
+        image,
+        1,
+        bootable=True,
+        partition_type=0x0C,
+        start_sector=partition_start,
+        sector_count=partition_sectors,
+    )
+    write_fat32_partition(image, files, partition_start=partition_start, partition_sectors=partition_sectors)
     write_file(image_path, bytes(image))
+
+
+def make_fat32_ext4_image(
+    files: dict[str, bytes],
+    image_path: Path,
+    *,
+    image_mib: int,
+    boot_mib: int,
+    data_label: str = "PLUTO_DATA",
+) -> None:
+    total_sectors = image_mib * 1024 * 1024 // SECTOR_SIZE
+    boot_start = 2048
+    boot_sectors = boot_mib * 1024 * 1024 // SECTOR_SIZE
+    data_start = round_up(boot_start + boot_sectors, 2048)
+    data_sectors = total_sectors - data_start
+    if data_sectors < 32768:
+        raise ValueError("SD image is too small for a useful ext4 data partition")
+
+    image = bytearray(total_sectors * SECTOR_SIZE)
+    write_mbr_partition(
+        image,
+        1,
+        bootable=True,
+        partition_type=0x0C,
+        start_sector=boot_start,
+        sector_count=boot_sectors,
+    )
+    write_mbr_partition(
+        image,
+        2,
+        bootable=False,
+        partition_type=0x83,
+        start_sector=data_start,
+        sector_count=data_sectors,
+    )
+    write_fat32_partition(image, files, partition_start=boot_start, partition_sectors=boot_sectors)
+    ext4 = make_ext4_image(data_sectors * SECTOR_SIZE, data_label)
+    data_offset = data_start * SECTOR_SIZE
+    image[data_offset : data_offset + len(ext4)] = ext4
+    write_file(image_path, bytes(image))
+
 
 
 def write_sdimg_dir(path: Path, files: dict[str, bytes]) -> None:
