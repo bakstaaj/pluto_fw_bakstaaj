@@ -21,9 +21,9 @@ Use this procedure for the newer Pluto-style boards that boot from a removable S
 The GitHub release package includes a ready-to-burn SD-card image:
 
 ```text
-release-packages/bakstaaj-v0.39-bakstaaj.2b-release.zip
-  sdcard/bakstaaj-v0.39-bakstaaj.2b-sdcard.img
-  sdcard/bakstaaj-v0.39-bakstaaj.2b-sdcard-files.zip
+release-packages/bakstaaj-v0.39-bakstaaj.2c-release.zip
+  sdcard/bakstaaj-v0.39-bakstaaj.2c-sdcard.img
+  sdcard/bakstaaj-v0.39-bakstaaj.2c-sdcard-files.zip
   sdcard/sdimg/
 ```
 
@@ -67,7 +67,7 @@ Use the image writer's "write image" or "flash from file" option. Do not copy th
 1. Download the latest release ZIP from GitHub and extract it on your Windows computer.
 2. Insert a new SD card. Any normal 1 GB or larger card is enough; the boot image itself is small.
 3. Open Raspberry Pi Imager, balenaEtcher, or Win32 Disk Imager.
-4. Select `sdcard/bakstaaj-v0.39-bakstaaj.2b-sdcard.img` from the extracted release.
+4. Select `sdcard/bakstaaj-v0.39-bakstaaj.2c-sdcard.img` from the extracted release.
 5. Select the SD card device. Double-check this carefully; the write operation overwrites the selected device.
 6. Write or flash the image, then let the tool finish its verify step if it offers one.
 7. Eject the SD card cleanly from Windows.
@@ -87,7 +87,7 @@ Expected boot signs:
 - U-Boot reads `uEnv.txt`, `uImage`, `devicetree.dtb`, and `uramdisk.image.gz` from the SD card.
 - Linux sees the SD card as `mmcblk0`.
 - Windows sees the normal Pluto USB mass-storage drive on the OTG port.
-- The serial login banner reports `device-fw v0.39-bakstaaj.2b`.
+- The serial login banner reports `device-fw v0.39-bakstaaj.2c`.
 - The dashboard loads at `http://192.168.2.1/dashboard.html` when USB networking is up.
 
 ### Copy-Files Fallback
@@ -95,7 +95,7 @@ Expected boot signs:
 If an image writer is not available, use the copy-files package only on a card that is already formatted as FAT32:
 
 1. Format a spare SD card as FAT32.
-2. Extract `sdcard/bakstaaj-v0.39-bakstaaj.2b-sdcard-files.zip`.
+2. Extract `sdcard/bakstaaj-v0.39-bakstaaj.2c-sdcard-files.zip`.
 3. Copy the extracted files to the root of the SD card, not into a subdirectory.
 4. Verify that the card root contains `BOOT.bin`, `uEnv.txt`, `uImage`, `devicetree.dtb`, and `uramdisk.image.gz`.
 5. Eject the card cleanly before booting the Pluto board.
