@@ -12,15 +12,60 @@ if ! command -v "$python_bin" >/dev/null 2>&1; then
 	python_bin=python
 fi
 
+python_syntax() {
+	"$python_bin" - "$1" <<'PY'
+import ast
+import pathlib
+import sys
+
+path = pathlib.Path(sys.argv[1])
+ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+PY
+}
+
 export PLUTO_RADIO_PROFILE_DIR="$profiles"
 export PLUTO_RADIO_DRY_RUN=1
 
-"$python_bin" -m py_compile "$api"
-"$python_bin" -m py_compile buildroot/board/pluto/pluto-audio-backend
-"$python_bin" -m py_compile buildroot/board/pluto/pluto-audio-sim-backend
+python_syntax "$api"
+python_syntax buildroot/board/pluto/pluto-audio-backend
+python_syntax buildroot/board/pluto/pluto-audio-sim-backend
 "$python_bin" "$api" profiles >/dev/null
 "$python_bin" "$api" status >/dev/null
 "$python_bin" "$api" health >/dev/null
+PLUTO_RADIO_API_MODE=lighttpd-python-http "$python_bin" - "$api" <<'PY'
+import importlib.util
+import json
+import os
+import sys
+import threading
+import urllib.request
+from importlib.machinery import SourceFileLoader
+from pathlib import Path
+
+api_path = Path(sys.argv[1])
+loader = SourceFileLoader("pluto_radio_api_http_validation", str(api_path))
+spec = importlib.util.spec_from_loader("pluto_radio_api_http_validation", loader)
+api = importlib.util.module_from_spec(spec)
+loader.exec_module(api)
+
+server = api.RadioApiHttpServer(("127.0.0.1", 0), api.RadioApiHttpHandler)
+thread = threading.Thread(target=server.serve_forever, daemon=True)
+thread.start()
+base = f"http://127.0.0.1:{server.server_address[1]}"
+try:
+    with urllib.request.urlopen(base + "/system/health", timeout=5) as response:
+        health = json.loads(response.read().decode("utf-8"))
+    assert health["system"]["api_mode"] == "lighttpd-python-http"
+    with urllib.request.urlopen(base + "/cgi-bin/pluto-radio-api?path=/radio/profile/list", timeout=5) as response:
+        profiles_payload = json.loads(response.read().decode("utf-8"))
+    assert profiles_payload["ok"] is True
+    with urllib.request.urlopen(base + "/cgi-bin/pluto-metrics.cgi", timeout=5) as response:
+        metrics_payload = json.loads(response.read().decode("utf-8"))
+    assert "system" in metrics_payload and "radio" in metrics_payload
+finally:
+    server.shutdown()
+    server.server_close()
+PY
 "$python_bin" "$api" logs audio >/dev/null
 "$python_bin" "$api" audio-status >/dev/null
 "$python_bin" "$api" watchdog-status >/dev/null
@@ -43,6 +88,81 @@ done
 "$python_bin" "$api" audio-start NOAA_NFM --simulate >/dev/null
 "$python_bin" "$api" audio-status >/dev/null
 "$python_bin" "$api" audio-stop >/dev/null
+tmp_stream_dir="$(mktemp -d "${TMPDIR:-/tmp}/pluto-audio-stream-test.XXXXXX")"
+tmp_stream_out="${TMPDIR:-/tmp}/pluto-audio-stream-test.$$.out"
+cleanup_stream_test() {
+	rm -rf "$tmp_stream_dir"
+	rm -f "$tmp_stream_out"
+}
+trap cleanup_stream_test EXIT
+REQUEST_METHOD=GET "$python_bin" - "$api" "$tmp_stream_dir" >"$tmp_stream_out" <<'PY'
+import importlib.util
+import json
+import os
+import sys
+import threading
+import time
+from importlib.machinery import SourceFileLoader
+from pathlib import Path
+
+api_path = Path(sys.argv[1])
+state_dir = Path(sys.argv[2])
+loader = SourceFileLoader("pluto_radio_api", str(api_path))
+spec = importlib.util.spec_from_loader("pluto_radio_api", loader)
+api = importlib.util.module_from_spec(spec)
+loader.exec_module(api)
+
+api.STATE_DIR = state_dir
+api.AUDIO_STATE_FILE = state_dir / "audio.json"
+api.AUDIO_FIFO = state_dir / "audio.pcm"
+os.environ["PLUTO_RADIO_DRY_RUN"] = "0"
+state_dir.mkdir(parents=True, exist_ok=True)
+os.mkfifo(api.AUDIO_FIFO)
+api.AUDIO_STATE_FILE.write_text(
+    json.dumps(
+        {
+            "state": "running",
+            "profile": "NOAA_NFM",
+            "demod_mode": "nfm",
+            "audio_rate_hz": 8000,
+            "stream_format": "pcm_s16le",
+            "fifo_path": str(api.AUDIO_FIFO),
+            "pid": os.getpid(),
+            "backend": "validation",
+        }
+    ),
+    encoding="utf-8",
+)
+
+def writer():
+    with api.AUDIO_FIFO.open("wb", buffering=0) as handle:
+        deadline = time.time() + 3
+        while time.time() < deadline:
+            try:
+                handle.write(b"\x00" * 512)
+            except BrokenPipeError:
+                break
+            time.sleep(0.01)
+
+thread = threading.Thread(target=writer, daemon=True)
+thread.start()
+api.stream_audio("wav", {"seconds": "1"})
+thread.join(timeout=1)
+PY
+"$python_bin" - "$tmp_stream_out" <<'PY'
+from pathlib import Path
+import sys
+
+data = Path(sys.argv[1]).read_bytes()
+headers_end = data.find(b"\n\n")
+riff = data.find(b"RIFF")
+if not data.startswith(b"Content-Type: audio/wav\nCache-Control: no-store\n\n"):
+    raise SystemExit("live.wav CGI headers were not emitted before the WAV body")
+if riff <= headers_end:
+    raise SystemExit("live.wav RIFF body appeared before the header terminator")
+PY
+cleanup_stream_test
+trap - EXIT
 controls_json="$("$python_bin" "$api" audio-start NOAA_NFM --simulate squelch_db=-58 deemphasis=50us agc=fast_attack output_gain=1.5 noise_gate_db=-85 dc_block=0)"
 printf '%s\n' "$controls_json" | "$python_bin" -c 'import json, sys
 payload = json.load(sys.stdin)
@@ -56,10 +176,23 @@ assert controls["dc_block"] is False'
 "$python_bin" "$api" capture-start IQ_CAPTURE --simulate >/dev/null
 "$python_bin" "$api" spectrum-snapshot IQ_CAPTURE --simulate >/dev/null
 "$python_bin" "$api" spectrum-top IQ_CAPTURE --simulate >/dev/null
+"$python_bin" "$api" spectrum-stream IQ_CAPTURE --simulate frames=2 interval_ms=50 bins=32 | "$python_bin" -c 'import json, sys
+rows = [json.loads(line) for line in sys.stdin if line.strip()]
+assert len(rows) == 2
+assert all(row.get("type") == "spectrum_row" for row in rows)
+assert all(len(row.get("points", [])) == 32 for row in rows)'
 REQUEST_METHOD=GET QUERY_STRING='path=/radio/spectrum/snapshot&profile=IQ_CAPTURE&frequency_hz=162550000&bins=64&simulate=true' \
 	"$python_bin" "$api" >/dev/null
 REQUEST_METHOD=GET QUERY_STRING='path=/radio/spectrum/top&profile=IQ_CAPTURE&frequency_hz=162550000&top_n=3&simulate=true' \
 	"$python_bin" "$api" >/dev/null
+REQUEST_METHOD=GET QUERY_STRING='path=/radio/spectrum/stream&profile=IQ_CAPTURE&frequency_hz=162550000&bins=32&frames=2&interval_ms=50&simulate=true' \
+	"$python_bin" "$api" | "$python_bin" -c 'import json, sys
+data = sys.stdin.read()
+header, body = data.split("\n\n", 1)
+assert "Content-Type: application/x-ndjson" in header
+rows = [json.loads(line) for line in body.splitlines() if line.strip()]
+assert len(rows) == 2
+assert rows[0]["type"] == "spectrum_row"'
 "$python_bin" "$api" loopback-start LOOPBACK_TEST --simulate >/dev/null
 "$python_bin" "$api" tx-start TX_TEST_TONE --simulate >/dev/null
 "$python_bin" "$api" tx-start TX_TEST_TONE --simulate tx_mode=carrier >/dev/null

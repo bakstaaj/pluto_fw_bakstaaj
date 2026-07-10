@@ -18,10 +18,6 @@ copy_from_host() {
 	local src="$host_dir/$rel"
 	local dst="$rel"
 
-	if [ "$(readlink -f "$src" 2>/dev/null || echo "$src")" = "$(readlink -f "$dst" 2>/dev/null || echo "$dst")" ]; then
-		return
-	fi
-
 	cp "$src" "$dst"
 }
 
@@ -50,6 +46,7 @@ patched_files=(
 	buildroot/board/pluto/S98autostart \
 	buildroot/board/pluto/device_persistent_keys \
 	buildroot/board/pluto/ifupdown.sh \
+	buildroot/board/pluto/lighttpd.conf \
 	buildroot/board/pluto/post-build.sh \
 	buildroot/board/pluto/pluto-sdcard-prepare \
 	buildroot/board/pluto/pluto-web-apply-settings \
@@ -57,6 +54,7 @@ patched_files=(
 	buildroot/board/pluto/pluto-audio-backend \
 	buildroot/board/pluto/pluto-audio-dsp/pluto-audio-backend.c \
 	buildroot/board/pluto/pluto-audio-dsp/pluto-loopback-backend.c \
+	buildroot/board/pluto/pluto-audio-dsp/pluto-spectrum-backend.c \
 	buildroot/board/pluto/pluto-audio-sim-backend \
 	buildroot/board/pluto/pluto-doppler-worker \
 	buildroot/board/pluto/pluto-radio/profiles/FM_BROADCAST_WFM.json \
@@ -98,6 +96,7 @@ copy_from_host buildroot/board/pluto/S70pluto-radio-api
 copy_from_host buildroot/board/pluto/S98autostart
 copy_from_host buildroot/board/pluto/device_persistent_keys
 copy_from_host buildroot/board/pluto/ifupdown.sh
+copy_from_host buildroot/board/pluto/lighttpd.conf
 copy_from_host buildroot/board/pluto/post-build.sh
 copy_from_host buildroot/board/pluto/pluto-sdcard-prepare
 copy_from_host buildroot/board/pluto/pluto-web-apply-settings
@@ -106,6 +105,7 @@ copy_from_host buildroot/board/pluto/pluto-audio-backend
 mkdir -p buildroot/board/pluto/pluto-audio-dsp
 copy_from_host buildroot/board/pluto/pluto-audio-dsp/pluto-audio-backend.c
 copy_from_host buildroot/board/pluto/pluto-audio-dsp/pluto-loopback-backend.c
+copy_from_host buildroot/board/pluto/pluto-audio-dsp/pluto-spectrum-backend.c
 copy_from_host buildroot/board/pluto/pluto-audio-sim-backend
 copy_from_host buildroot/board/pluto/pluto-doppler-worker
 mkdir -p buildroot/board/pluto/pluto-radio/profiles

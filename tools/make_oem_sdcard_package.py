@@ -358,6 +358,15 @@ def add_or_replace_cpio_dir(
     )
 
 
+def remove_cpio_path_prefix(entries: list[dict[str, object]], prefix: str) -> None:
+    prefix = prefix.rstrip("/")
+    entries[:] = [
+        entry
+        for entry in entries
+        if entry["name"] != prefix and not str(entry["name"]).startswith(prefix + "/")
+    ]
+
+
 def patch_versions_file(data: bytes, fw_version: str) -> bytes:
     lines = data.decode("utf-8", errors="replace").splitlines()
     patched = False
@@ -396,9 +405,9 @@ def inject_web_dashboard(entries: list[dict[str, object]], repo: Path) -> None:
 
     add_or_replace_cpio_dir(entries, "www")
     add_or_replace_cpio_dir(entries, "www/img")
-    add_or_replace_cpio_dir(entries, "www/cgi-bin")
     add_or_replace_cpio_dir(entries, "usr")
     add_or_replace_cpio_dir(entries, "usr/sbin")
+    remove_cpio_path_prefix(entries, "www/cgi-bin")
 
     add_or_replace_cpio_file(
         entries,
@@ -413,14 +422,6 @@ def inject_web_dashboard(entries: list[dict[str, object]], repo: Path) -> None:
                 f"www/img/{path.name}",
                 read_file(path),
                 mode=0o100644,
-            )
-    for path in sorted((web_dir / "cgi-bin").iterdir()):
-        if path.is_file():
-            add_or_replace_cpio_file(
-                entries,
-                f"www/cgi-bin/{path.name}",
-                read_file(path),
-                mode=0o100755,
             )
     add_or_replace_cpio_file(
         entries,
