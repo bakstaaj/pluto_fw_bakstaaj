@@ -202,6 +202,12 @@ cp build/boot.frm "$asset_dir/boot.frm"
 cp build/boot.dfu "$asset_dir/boot.dfu"
 
 make -C buildroot ARCH=arm "zynq_${target_name}_defconfig"
+if grep -q '^BR2_PACKAGE_E2FSPROGS_RESIZE2FS=y$' buildroot/.config && \
+	[ -d buildroot/output/build/e2fsprogs-1.46.5 ] && \
+	[ ! -x buildroot/output/target/sbin/resize2fs ]; then
+	echo "resize2fs is enabled but missing from cached target; rebuilding e2fsprogs"
+	make -C buildroot e2fsprogs-dirclean
+fi
 if ! grep -q '^BR2_PACKAGE_FFTW_SINGLE=y$' buildroot/.config; then
 	echo "BR2_PACKAGE_FFTW_SINGLE is disabled; rebuilding liquid-dsp/pluto-audio-dsp without stale FFTW-single artifacts"
 	rm -rf \
