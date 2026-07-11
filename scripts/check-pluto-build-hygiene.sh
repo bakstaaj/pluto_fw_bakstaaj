@@ -38,6 +38,7 @@ files=(
 	scripts/validate-pluto-radio-api.sh
 	scripts/check-firmware-size-budget.py
 	tools/make_plutoplus_sdcard_image.py
+	tools/make_oem_sdcard_package.py
 	examples/README.md
 	examples/python/pluto_radio_client.py
 	examples/browser/pluto-radio-client.html
@@ -47,10 +48,25 @@ files=(
 	buildroot/package/python-sgp4/python-sgp4.mk
 	buildroot/configs/zynq_pluto_defconfig
 	docs/firmware-api-contract.md
+	docs/firmware-radio-appliance-architecture.md
 	linux/arch/arm/boot/dts/zynq-pluto-sdr.dtsi
 	linux/arch/arm/configs/zynq_pluto_defconfig
 	u-boot-xlnx/include/configs/zynq-common.h
 )
+
+no_legacy_web_files=(
+	README.md
+	docs/firmware-api-contract.md
+	docs/firmware-radio-appliance-architecture.md
+	buildroot/board/pluto/lighttpd.conf
+	buildroot/board/pluto/pluto-radio-api
+	buildroot/board/pluto/web/api-test.html
+	buildroot/board/pluto/web/img/pluto-api-test.js
+	buildroot/board/pluto/web/img/pluto-dashboard.js
+	scripts/validate-pluto-radio-api.sh
+	tools/make_oem_sdcard_package.py
+)
+legacy_web_token="c""gi"
 
 bash_bin="${BASH:-bash}"
 tool_dir="${bash_bin%/*}"
@@ -93,6 +109,18 @@ python_syntax tools/make_plutoplus_sdcard_image.py
 python_syntax examples/python/pluto_radio_client.py
 "$sh_bin" -n buildroot/board/pluto/pluto-doppler-worker
 grep -q 'proxy.server' buildroot/board/pluto/lighttpd.conf
+if grep -q '=~' buildroot/board/pluto/lighttpd.conf; then
+	echo "lighttpd.conf must avoid PCRE-dependent regex conditions" >&2
+	exit 1
+fi
+if [ -e "buildroot/board/pluto/web/${legacy_web_token}-bin" ]; then
+	echo "Legacy web script path must not be packaged" >&2
+	exit 1
+fi
+if grep -R -n -i "$legacy_web_token" "${no_legacy_web_files[@]}"; then
+	echo "Legacy web script references found in current API contract files" >&2
+	exit 1
+fi
 
 crlf_report="${TMPDIR:-/tmp}/check-pluto-build-hygiene.crlf.$$"
 : > "$crlf_report"

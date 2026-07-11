@@ -15,7 +15,9 @@ The firmware now carries:
 
 - JSON radio profiles in `/etc/pluto-radio/profiles`.
 - A small radio API helper at `/usr/sbin/pluto-radio-api`.
-- A BusyBox `httpd` CGI entrypoint at `/cgi-bin/pluto-radio-api`.
+- A resident Python HTTP API on `127.0.0.1:8081`.
+- lighttpd on port 80 for static dashboard/API-test pages and reverse proxying
+  logical API routes to the resident API.
 - A boot-time profile check in `/etc/init.d/S70pluto-radio-api`.
 - Audio lifecycle endpoints for start/stop/status/live stream routing.
 - A simulated PCM backend for validation and UI integration.
@@ -127,8 +129,7 @@ The spectrum service follows the same size-conscious pattern:
 - Requests are bounded by `PLUTO_SPECTRUM_MAX_BINS` and
   `PLUTO_SPECTRUM_MAX_TOP_N`.
 - `GET /radio/spectrum/stream` returns bounded NDJSON rows from one long-running
-  backend process, avoiding a full CGI/backend startup cycle for every waterfall
-  row.
+  backend process, avoiding a backend startup cycle for every waterfall row.
 - Apps should prefer the top-peak endpoint when they do not need the full
   spectrum point list.
 

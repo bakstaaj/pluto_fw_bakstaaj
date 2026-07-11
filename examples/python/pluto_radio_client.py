@@ -10,7 +10,6 @@ import urllib.request
 
 
 DEFAULT_BASE_URL = "http://192.168.2.1"
-API_PATH = "/cgi-bin/pluto-radio-api"
 
 
 class PlutoRadioClient:
@@ -18,8 +17,7 @@ class PlutoRadioClient:
         self.base_url = base_url.rstrip("/")
 
     def call(self, method, path, payload=None):
-        query = urllib.parse.urlencode({"path": path})
-        url = f"{self.base_url}{API_PATH}?{query}"
+        url = urllib.parse.urljoin(f"{self.base_url}/", path.lstrip("/"))
         data = None
         headers = {"Accept": "application/json"}
         if method != "GET":

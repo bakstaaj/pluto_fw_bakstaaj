@@ -1,23 +1,35 @@
 # Pluto Firmware Radio API Contract
 
 This document is the app-builder contract for the Pluto firmware radio service.
-It describes the HTTP/CGI API exposed on the Pluto itself and the matching
-`pluto-radio-api` CLI used for host-side validation.
+It describes the HTTP API exposed on the Pluto itself and the matching
+`pluto-radio-api` CLI used for on-device operation and host-side validation.
 
 ## Transport
 
-BusyBox `httpd` serves `/www` and runs CGI scripts from `/www/cgi-bin`.
-The stable HTTP entrypoint is:
+The current firmware uses a resident Python API process behind lighttpd:
+
+- `pluto-radio-api serve host=127.0.0.1 port=8081` owns the firmware API.
+- lighttpd serves static files from `/www` on port 80.
+- lighttpd reverse-proxies API routes from port 80 to the resident API.
+- Browser clients and host-side tools normally use the port 80 lighttpd
+  surface.
+- On-device applications should use the resident API directly with
+  `base_url=http://127.0.0.1:8081`.
+
+Base URLs:
 
 ```text
-/cgi-bin/pluto-radio-api
+External/browser base URL: http://192.168.2.1
+On-device direct base URL: http://127.0.0.1:8081
 ```
 
-Pass the logical API route in the `path` query parameter:
+Use logical API routes directly:
 
 ```text
-GET  /cgi-bin/pluto-radio-api?path=/system/health
-POST /cgi-bin/pluto-radio-api?path=/radio/profile/apply
+GET  http://192.168.2.1/system/health
+POST http://192.168.2.1/radio/profile/apply
+GET  http://127.0.0.1:8081/system/health
+POST http://127.0.0.1:8081/radio/profile/apply
 ```
 
 POST bodies should be JSON:
@@ -47,19 +59,19 @@ All control and status endpoints return JSON. Successful responses include
 Read health:
 
 ```sh
-curl "http://192.168.2.1/cgi-bin/pluto-radio-api?path=/system/health"
+curl "http://192.168.2.1/system/health"
 ```
 
 List profiles:
 
 ```sh
-curl "http://192.168.2.1/cgi-bin/pluto-radio-api?path=/radio/profile/list"
+curl "http://192.168.2.1/radio/profile/list"
 ```
 
 Apply a profile:
 
 ```sh
-curl -X POST "http://192.168.2.1/cgi-bin/pluto-radio-api?path=/radio/profile/apply" \
+curl -X POST "http://192.168.2.1/radio/profile/apply" \
   -H "Content-Type: application/json" \
   -d "{\"profile\":\"SAT_AUDIO_NFM\",\"frequency_hz\":145800000}"
 ```
@@ -67,7 +79,7 @@ curl -X POST "http://192.168.2.1/cgi-bin/pluto-radio-api?path=/radio/profile/app
 Start decoded audio in simulation:
 
 ```sh
-curl -X POST "http://192.168.2.1/cgi-bin/pluto-radio-api?path=/radio/audio/start" \
+curl -X POST "http://192.168.2.1/radio/audio/start" \
   -H "Content-Type: application/json" \
   -d "{\"profile\":\"NOAA_NFM\",\"simulate\":true}"
 ```
@@ -75,7 +87,7 @@ curl -X POST "http://192.168.2.1/cgi-bin/pluto-radio-api?path=/radio/audio/start
 Run a bounded TX test in simulation:
 
 ```sh
-curl -X POST "http://192.168.2.1/cgi-bin/pluto-radio-api?path=/radio/tx/start" \
+curl -X POST "http://192.168.2.1/radio/tx/start" \
   -H "Content-Type: application/json" \
   -d "{\"profile\":\"TX_TEST_TONE\",\"simulate\":true}"
 ```
@@ -83,7 +95,7 @@ curl -X POST "http://192.168.2.1/cgi-bin/pluto-radio-api?path=/radio/tx/start" \
 Check guardrails before TX:
 
 ```sh
-curl -X POST "http://192.168.2.1/cgi-bin/pluto-radio-api?path=/radio/tx/guardrails" \
+curl -X POST "http://192.168.2.1/radio/tx/guardrails" \
   -H "Content-Type: application/json" \
   -d "{\"profile\":\"TX_AUDIO_FM\",\"simulate\":true}"
 ```
@@ -91,7 +103,7 @@ curl -X POST "http://192.168.2.1/cgi-bin/pluto-radio-api?path=/radio/tx/guardrai
 Run the safe self-test bundle:
 
 ```sh
-curl -X POST "http://192.168.2.1/cgi-bin/pluto-radio-api?path=/system/self-test" \
+curl -X POST "http://192.168.2.1/system/self-test" \
   -H "Content-Type: application/json" \
   -d "{}"
 ```
@@ -99,7 +111,7 @@ curl -X POST "http://192.168.2.1/cgi-bin/pluto-radio-api?path=/system/self-test"
 Run a bounded live TX test only in a controlled RF setup:
 
 ```sh
-curl -X POST "http://192.168.2.1/cgi-bin/pluto-radio-api?path=/radio/tx/start" \
+curl -X POST "http://192.168.2.1/radio/tx/start" \
   -H "Content-Type: application/json" \
   -d "{\"profile\":\"TX_TEST_TONE\",\"confirm_live_tx\":true}"
 ```
@@ -374,7 +386,7 @@ Returns a single JSON view for dashboards and app readiness checks:
   "system": {
     "hostname": "pluto",
     "uptime_seconds": 1234,
-    "api_mode": "busybox-httpd-cgi",
+    "api_mode": "lighttpd-python-http",
     "api_version": "0.1"
   },
   "radio": {},
@@ -482,10 +494,9 @@ GET /radio/audio/live.wav
 Applications should prefer `live.wav` for browser playback and `live.pcm` for
 native clients that already know the sample format.
 
-When requested through the CGI entrypoint, `live.wav` returns a normal HTTP
-response with `Content-Type: audio/wav`, `Cache-Control: no-store`, a blank
-line, and then the WAV `RIFF` body. Clients should not need to special-case a
-status-line-only WAV response.
+`live.wav` returns a normal HTTP response with `Content-Type: audio/wav`,
+`Cache-Control: no-store`, a blank line, and then the WAV `RIFF` body. Clients
+should not need to special-case a status-line-only WAV response.
 
 `POST /radio/audio/stop`
 
@@ -820,10 +831,11 @@ The firmware includes an app-builder test page:
 http://192.168.2.1/api-test.html
 ```
 
-It exercises the same CGI routes from the browser and includes safe simulated
-tests for health, profiles, audio, spectrum, loopback, and TX. Live TX remains
-guarded by an explicit checkbox and should only be used in a controlled RF
-setup.
+It exercises logical API routes from the browser and includes safe simulated
+tests for health, profiles, audio, spectrum, loopback, and TX. The page sends
+requests through the same-origin lighttpd proxy and shows the matching
+on-device direct URL using `http://127.0.0.1:8081`. Live TX remains guarded by
+an explicit checkbox and should only be used in a controlled RF setup.
 
 ## Validation
 

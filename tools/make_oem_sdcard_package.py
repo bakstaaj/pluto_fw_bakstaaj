@@ -407,8 +407,6 @@ def inject_web_dashboard(entries: list[dict[str, object]], repo: Path) -> None:
     add_or_replace_cpio_dir(entries, "www/img")
     add_or_replace_cpio_dir(entries, "usr")
     add_or_replace_cpio_dir(entries, "usr/sbin")
-    remove_cpio_path_prefix(entries, "www/cgi-bin")
-
     add_or_replace_cpio_file(
         entries,
         "www/dashboard.html",
@@ -821,7 +819,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--include-web-dashboard",
         action="store_true",
-        help="Inject the Pluto dashboard web UI, CGI endpoints, and persistent settings applier",
+        help="Inject the Pluto dashboard web UI and persistent settings applier",
     )
     return parser.parse_args()
 

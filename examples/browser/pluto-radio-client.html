@@ -107,11 +107,9 @@ pre {
   </section>
 </main>
 <script>
-const apiPath = "/cgi-bin/pluto-radio-api";
-
 function endpoint(path) {
   const baseUrl = document.getElementById("baseUrl").value.replace(/\/+$/, "");
-  return `${baseUrl}${apiPath}?path=${encodeURIComponent(path)}`;
+  return `${baseUrl}/${path.replace(/^\/+/, "")}`;
 }
 
 function output(payload) {

@@ -56,10 +56,10 @@ try:
     with urllib.request.urlopen(base + "/system/health", timeout=5) as response:
         health = json.loads(response.read().decode("utf-8"))
     assert health["system"]["api_mode"] == "lighttpd-python-http"
-    with urllib.request.urlopen(base + "/cgi-bin/pluto-radio-api?path=/radio/profile/list", timeout=5) as response:
+    with urllib.request.urlopen(base + "/radio/profile/list", timeout=5) as response:
         profiles_payload = json.loads(response.read().decode("utf-8"))
     assert profiles_payload["ok"] is True
-    with urllib.request.urlopen(base + "/cgi-bin/pluto-metrics.cgi", timeout=5) as response:
+    with urllib.request.urlopen(base + "/system/metrics", timeout=5) as response:
         metrics_payload = json.loads(response.read().decode("utf-8"))
     assert "system" in metrics_payload and "radio" in metrics_payload
 finally:
@@ -95,18 +95,20 @@ cleanup_stream_test() {
 	rm -f "$tmp_stream_out"
 }
 trap cleanup_stream_test EXIT
-REQUEST_METHOD=GET "$python_bin" - "$api" "$tmp_stream_dir" >"$tmp_stream_out" <<'PY'
+PLUTO_RADIO_API_MODE=lighttpd-python-http "$python_bin" - "$api" "$tmp_stream_dir" "$tmp_stream_out" <<'PY'
 import importlib.util
 import json
 import os
 import sys
 import threading
 import time
+import urllib.request
 from importlib.machinery import SourceFileLoader
 from pathlib import Path
 
 api_path = Path(sys.argv[1])
 state_dir = Path(sys.argv[2])
+out_path = Path(sys.argv[3])
 loader = SourceFileLoader("pluto_radio_api", str(api_path))
 spec = importlib.util.spec_from_loader("pluto_radio_api", loader)
 api = importlib.util.module_from_spec(spec)
@@ -146,7 +148,20 @@ def writer():
 
 thread = threading.Thread(target=writer, daemon=True)
 thread.start()
-api.stream_audio("wav", {"seconds": "1"})
+server = api.RadioApiHttpServer(("127.0.0.1", 0), api.RadioApiHttpHandler)
+server_thread = threading.Thread(target=server.serve_forever, daemon=True)
+server_thread.start()
+try:
+    base = f"http://127.0.0.1:{server.server_address[1]}"
+    with urllib.request.urlopen(base + "/radio/audio/live.wav?seconds=1", timeout=5) as response:
+        if response.status != 200:
+            raise SystemExit(f"unexpected live.wav HTTP status {response.status}")
+        if response.headers.get("Content-Type") != "audio/wav":
+            raise SystemExit("live.wav did not return audio/wav")
+        out_path.write_bytes(response.read(4096))
+finally:
+    server.shutdown()
+    server.server_close()
 thread.join(timeout=1)
 PY
 "$python_bin" - "$tmp_stream_out" <<'PY'
@@ -154,12 +169,8 @@ from pathlib import Path
 import sys
 
 data = Path(sys.argv[1]).read_bytes()
-headers_end = data.find(b"\n\n")
-riff = data.find(b"RIFF")
-if not data.startswith(b"Content-Type: audio/wav\nCache-Control: no-store\n\n"):
-    raise SystemExit("live.wav CGI headers were not emitted before the WAV body")
-if riff <= headers_end:
-    raise SystemExit("live.wav RIFF body appeared before the header terminator")
+if not data.startswith(b"RIFF"):
+    raise SystemExit("live.wav HTTP body did not start with RIFF")
 PY
 cleanup_stream_test
 trap - EXIT
@@ -181,18 +192,44 @@ rows = [json.loads(line) for line in sys.stdin if line.strip()]
 assert len(rows) == 2
 assert all(row.get("type") == "spectrum_row" for row in rows)
 assert all(len(row.get("points", [])) == 32 for row in rows)'
-REQUEST_METHOD=GET QUERY_STRING='path=/radio/spectrum/snapshot&profile=IQ_CAPTURE&frequency_hz=162550000&bins=64&simulate=true' \
-	"$python_bin" "$api" >/dev/null
-REQUEST_METHOD=GET QUERY_STRING='path=/radio/spectrum/top&profile=IQ_CAPTURE&frequency_hz=162550000&top_n=3&simulate=true' \
-	"$python_bin" "$api" >/dev/null
-REQUEST_METHOD=GET QUERY_STRING='path=/radio/spectrum/stream&profile=IQ_CAPTURE&frequency_hz=162550000&bins=32&frames=2&interval_ms=50&simulate=true' \
-	"$python_bin" "$api" | "$python_bin" -c 'import json, sys
-data = sys.stdin.read()
-header, body = data.split("\n\n", 1)
-assert "Content-Type: application/x-ndjson" in header
-rows = [json.loads(line) for line in body.splitlines() if line.strip()]
-assert len(rows) == 2
-assert rows[0]["type"] == "spectrum_row"'
+PLUTO_RADIO_API_MODE=lighttpd-python-http "$python_bin" - "$api" <<'PY'
+import importlib.util
+import json
+import sys
+import threading
+import urllib.request
+from importlib.machinery import SourceFileLoader
+from pathlib import Path
+
+api_path = Path(sys.argv[1])
+loader = SourceFileLoader("pluto_radio_api_spectrum_http_validation", str(api_path))
+spec = importlib.util.spec_from_loader("pluto_radio_api_spectrum_http_validation", loader)
+api = importlib.util.module_from_spec(spec)
+loader.exec_module(api)
+
+server = api.RadioApiHttpServer(("127.0.0.1", 0), api.RadioApiHttpHandler)
+thread = threading.Thread(target=server.serve_forever, daemon=True)
+thread.start()
+base = f"http://127.0.0.1:{server.server_address[1]}"
+try:
+    with urllib.request.urlopen(base + "/radio/spectrum/snapshot?profile=IQ_CAPTURE&frequency_hz=162550000&bins=64&simulate=true", timeout=5) as response:
+        snapshot = json.loads(response.read().decode("utf-8"))
+    assert snapshot["ok"] is True
+
+    with urllib.request.urlopen(base + "/radio/spectrum/top?profile=IQ_CAPTURE&frequency_hz=162550000&top_n=3&simulate=true", timeout=5) as response:
+        top = json.loads(response.read().decode("utf-8"))
+    assert top["ok"] is True
+
+    with urllib.request.urlopen(base + "/radio/spectrum/stream?profile=IQ_CAPTURE&frequency_hz=162550000&bins=32&frames=2&interval_ms=50&simulate=true", timeout=5) as response:
+        if response.headers.get("Content-Type") != "application/x-ndjson":
+            raise SystemExit("spectrum stream did not return NDJSON")
+        rows = [json.loads(line) for line in response.read().decode("utf-8").splitlines() if line.strip()]
+    assert len(rows) == 2
+    assert rows[0]["type"] == "spectrum_row"
+finally:
+    server.shutdown()
+    server.server_close()
+PY
 "$python_bin" "$api" loopback-start LOOPBACK_TEST --simulate >/dev/null
 "$python_bin" "$api" tx-start TX_TEST_TONE --simulate >/dev/null
 "$python_bin" "$api" tx-start TX_TEST_TONE --simulate tx_mode=carrier >/dev/null
