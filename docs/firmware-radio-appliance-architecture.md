@@ -22,7 +22,7 @@ The firmware now carries:
 - A staged production audio DSP package using libiio and liquid-dsp.
 - Health, logs, and bounded watchdog endpoints.
 - Bounded capture metadata/list/delete/download API scaffold.
-- Bounded spectrum snapshot and top-peak API scaffold.
+- Bounded spectrum snapshot, top-peak, and NDJSON stream API scaffold.
 - Bounded Doppler plan executor and tiny retune worker.
 - Firmware artifact size budget checks for rootfs, ITB/FRM, and release ZIPs.
 - A host-side dry-run validation script at `scripts/validate-pluto-radio-api.sh`.
@@ -126,6 +126,9 @@ The spectrum service follows the same size-conscious pattern:
 - `simulate=true` returns deterministic points and peaks for app integration.
 - Requests are bounded by `PLUTO_SPECTRUM_MAX_BINS` and
   `PLUTO_SPECTRUM_MAX_TOP_N`.
+- `GET /radio/spectrum/stream` returns bounded NDJSON rows from one long-running
+  backend process, avoiding a full CGI/backend startup cycle for every waterfall
+  row.
 - Apps should prefer the top-peak endpoint when they do not need the full
   spectrum point list.
 
@@ -165,7 +168,8 @@ gain, stream state, radio state, and last error in `/var/run/pluto-radio/state.j
 Recommended next implementation order:
 
 1. Build and measure the `pluto-audio-dsp` package in the target image.
-2. Production spectrum backend using the smallest viable sample/FFT path.
+2. Replace the current direct-bin spectrum math with the smallest viable FFT
+   path if higher waterfall frame rates are required.
 3. Production capture backend with storage quotas.
 4. Persisted device-level configuration schema.
 5. Explicit TX/loopback safety API.

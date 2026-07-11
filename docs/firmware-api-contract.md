@@ -158,6 +158,7 @@ Spectrum:
 GET  /radio/spectrum/status
 GET  /radio/spectrum/snapshot
 GET  /radio/spectrum/top
+GET  /radio/spectrum/stream
 POST /radio/spectrum/snapshot
 POST /radio/spectrum/top
 ```
@@ -481,6 +482,11 @@ GET /radio/audio/live.wav
 Applications should prefer `live.wav` for browser playback and `live.pcm` for
 native clients that already know the sample format.
 
+When requested through the CGI entrypoint, `live.wav` returns a normal HTTP
+response with `Content-Type: audio/wav`, `Cache-Control: no-store`, a blank
+line, and then the WAV `RIFF` body. Clients should not need to special-case a
+status-line-only WAV response.
+
 `POST /radio/audio/stop`
 
 Stops the backend and removes the live FIFO.
@@ -530,11 +536,71 @@ Request:
 
 Returns bounded spectrum points and peak information.
 
+Spectrum power field contract:
+
+- Spectrum bin power is always reported as `points[].power_dbfs`.
+- Peak power is always reported as `peaks[].power_dbfs`.
+- Peak signal-to-noise ratio is reported as `peaks[].snr_db`.
+- The estimated floor for a snapshot or stream row is reported as
+  `noise_floor_dbfs`.
+- These values are numeric dBFS values. More-positive values are stronger
+  signals; for example, `-42.5` dBFS is stronger than `-90.25` dBFS.
+- Apps should treat `power_dbfs` as the canonical signal-power field for
+  spectrum data. Aliases such as `power`, `db`, `level`, `rssi`, or
+  `signal_power` are not part of the firmware spectrum contract.
+- Hardware receiver RSSI is a different measurement and appears in radio/IIO
+  status as `rx_rssi_ch0` and `rx_rssi_ch1`, not in spectrum point arrays.
+
 `GET /radio/spectrum/top`
 `POST /radio/spectrum/top`
 
 Uses the same input but returns only the peak list. Apps should use this when
 they do not need the full point array.
+
+`GET /radio/spectrum/stream`
+
+Query parameters:
+
+```text
+profile=IQ_CAPTURE
+center_frequency_hz=162550000
+span_hz=200000
+bins=192
+top_n=5
+frames=120
+interval_ms=250
+simulate=true
+```
+
+Returns `application/x-ndjson`, one JSON spectrum row per line. Each row is
+bounded to the requested bin count and has this shape:
+
+```json
+{
+  "ok": true,
+  "type": "spectrum_row",
+  "sequence": 0,
+  "time_epoch": 1783713600,
+  "sample_count": 4096,
+  "sample_rate_hz": 2400000,
+  "center_frequency_hz": 162550000,
+  "span_hz": 200000,
+  "bins": 192,
+  "backend": "external_stream",
+  "bounded": false,
+  "points": [
+    {"frequency_hz": 162450000, "power_dbfs": -90.25}
+  ],
+  "peaks": [
+    {"frequency_hz": 162550000, "power_dbfs": -42.5, "snr_db": 47.0}
+  ],
+  "noise_floor_dbfs": -89.5
+}
+```
+
+The stream is intentionally bounded by `frames` and
+`PLUTO_SPECTRUM_MAX_STREAM_FRAMES`; browser clients should reconnect if they
+want a continuous display beyond the current stream window.
 
 ## Loopback Diagnostics
 
