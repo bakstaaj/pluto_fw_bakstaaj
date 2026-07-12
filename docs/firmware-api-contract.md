@@ -228,7 +228,7 @@ Common fields:
   "name": "SAT_AUDIO_NFM",
   "label": "Satellite audio narrowband FM",
   "default_frequency_hz": 145800000,
-  "sample_rate_hz": 1000000,
+  "sample_rate_hz": 2400000,
   "rf_bandwidth_hz": 200000,
   "gain_control_mode": "manual",
   "gain_db": 40,
@@ -275,7 +275,8 @@ Validation bounds:
 
 ```text
 frequency_hz: 70 MHz to 6 GHz
-sample_rate_hz: 520 kSPS to 61.44 MSPS
+sample_rate_hz: 2.083334 MSPS to 61.44 MSPS for the default no-FIR AD9361
+clock path used by this firmware
 rf_bandwidth_hz: 200 kHz to 56 MHz
 tx_gain_db: -89.75 dB to 0 dB
 tx_amplitude: 0.0 to PLUTO_TX_MAX_AMPLITUDE, default 0.25
@@ -287,6 +288,13 @@ tx_cw_wpm: 5 to 40
 tx_duration_limit_seconds: 0 to PLUTO_TX_MAX_SECONDS, default 30
 loopback_duration_limit_seconds: 0 to PLUTO_LOOPBACK_MAX_SECONDS, default 10
 ```
+
+The AD9361 driver computes the minimum sample rate from the active clock path.
+In the default no-FIR path, the driver requires the ADC clock to remain at or
+above 25 MHz, making the practical sample-rate floor `ceil(25 MHz / 12)` =
+2,083,334 samples/second. Lower rates such as 1 MSPS can be valid only when an
+appropriate FIR decimation path is active; this firmware does not assume that
+path for bundled profiles.
 
 ## Guardrails and Calibration
 

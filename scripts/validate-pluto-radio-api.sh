@@ -29,6 +29,42 @@ export PLUTO_RADIO_DRY_RUN=1
 python_syntax "$api"
 python_syntax buildroot/board/pluto/pluto-audio-backend
 python_syntax buildroot/board/pluto/pluto-audio-sim-backend
+PLUTO_RADIO_DRY_RUN=1 "$python_bin" - "$api" "$profiles" <<'PY'
+import importlib.util
+import json
+import sys
+from importlib.machinery import SourceFileLoader
+from pathlib import Path
+
+api_path = Path(sys.argv[1])
+profile_dir = Path(sys.argv[2])
+loader = SourceFileLoader("pluto_radio_api_sample_rate_validation", str(api_path))
+spec = importlib.util.spec_from_loader("pluto_radio_api_sample_rate_validation", loader)
+api = importlib.util.module_from_spec(spec)
+loader.exec_module(api)
+
+floor = api.MIN_AD9361_NO_FIR_SAMPLE_RATE_HZ
+assert floor == 2083334
+assert api.parse_iio_available_range("[2083333 1 61440000]")["min"] == 2083333
+for path in sorted(profile_dir.glob("*.json")):
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if int(payload["sample_rate_hz"]) < floor:
+        raise SystemExit(f"{path.name} sample_rate_hz is below AD9361 no-FIR floor")
+try:
+    api.clean_profile(
+        {
+            "name": "BAD_SAMPLE_RATE",
+            "default_frequency_hz": 145800000,
+            "sample_rate_hz": 1000000,
+            "rf_bandwidth_hz": 200000,
+        },
+        profile_dir / "BAD_SAMPLE_RATE.json",
+    )
+except api.ApiError:
+    pass
+else:
+    raise SystemExit("1 MSPS profile unexpectedly passed validation")
+PY
 "$python_bin" "$api" profiles >/dev/null
 "$python_bin" "$api" status >/dev/null
 "$python_bin" "$api" health >/dev/null
