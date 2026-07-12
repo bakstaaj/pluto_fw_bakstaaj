@@ -73,6 +73,14 @@ import importlib.util
 import json
 import os
 import sys
+from pathlib import Path
+
+source = Path("buildroot/board/pluto/pluto-audio-dsp/pluto-audio-backend.c").read_text(encoding="utf-8")
+assert "errno == EINTR" in source
+assert "PLUTO_AUDIO_BACKEND_STATUS_FILE" in source
+assert "audio_sink_open_failed" in source
+assert "sink = open_audio_sink(fifo);" in source
+
 import threading
 import urllib.request
 from importlib.machinery import SourceFileLoader
@@ -152,6 +160,7 @@ api = importlib.util.module_from_spec(spec)
 loader.exec_module(api)
 
 api.STATE_DIR = state_dir
+api.AUDIO_BACKEND_STATUS_FILE = state_dir / "audio-backend-status.json"
 api.AUDIO_STATE_FILE = state_dir / "audio.json"
 api.AUDIO_FIFO = state_dir / "audio.pcm"
 os.environ["PLUTO_RADIO_DRY_RUN"] = "0"
@@ -185,6 +194,35 @@ if switched.get("backend_path") != str(fake_backend):
     raise SystemExit("simulate=true did not select the simulated audio backend path")
 api.stop_audio()
 old_backend.wait(timeout=2)
+api.AUDIO_STATE_FILE.write_text(
+    json.dumps(
+        {
+            "state": "running",
+            "profile": "NOAA_NFM",
+            "demod_mode": "nfm",
+            "audio_rate_hz": 8000,
+            "stream_format": "pcm_s16le",
+            "fifo_path": str(api.AUDIO_FIFO),
+            "pid": os.getpid(),
+            "backend": "external",
+        }
+    ),
+    encoding="utf-8",
+)
+api.AUDIO_BACKEND_STATUS_FILE.write_text(
+    json.dumps(
+        {
+            "state": "error",
+            "pid": os.getpid(),
+            "last_error": {"code": "audio_sink_open_failed", "message": "interrupted"},
+        }
+    ),
+    encoding="utf-8",
+)
+failed_status = api.audio_status()["audio"]
+if failed_status["state"] != "error" or failed_status["last_error"]["code"] != "audio_sink_open_failed":
+    raise SystemExit("audio backend sidecar failure did not propagate to audio status")
+api.clear_audio_backend_status()
 api.AUDIO_STATE_FILE.write_text(
     json.dumps(
         {
@@ -261,6 +299,14 @@ PLUTO_RADIO_API_MODE=lighttpd-python-http "$python_bin" - "$api" <<'PY'
 import importlib.util
 import json
 import sys
+from pathlib import Path
+
+source = Path("buildroot/board/pluto/pluto-audio-dsp/pluto-audio-backend.c").read_text(encoding="utf-8")
+assert "errno == EINTR" in source
+assert "PLUTO_AUDIO_BACKEND_STATUS_FILE" in source
+assert "audio_sink_open_failed" in source
+assert "sink = open_audio_sink(fifo);" in source
+
 import threading
 import urllib.request
 from importlib.machinery import SourceFileLoader

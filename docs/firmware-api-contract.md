@@ -499,6 +499,11 @@ Behavior:
     `simulate=true`.
   - `dry_run`: host validation mode.
 - Tracks state in `/var/run/pluto-radio/audio.json`.
+- Production audio backend startup failures are reported through
+  `audio.last_error` and force `audio.state` to `error`. The backend retries an
+  interrupted FIFO sink open (`EINTR`) instead of silently becoming a live but
+  non-producing process. Fatal backend startup details are also mirrored through
+  `/var/run/pluto-radio/audio-backend-status.json` for diagnostics.
 
 Audio streams:
 
