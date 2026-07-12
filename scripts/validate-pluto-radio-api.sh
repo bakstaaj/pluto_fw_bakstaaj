@@ -82,6 +82,8 @@ assert "audio_sink_open_failed" in source
 assert "sink = open_audio_sink(fifo);" in source
 assert "iio_context_set_timeout" in source
 assert "pcm_bytes" in source
+assert "iio_buffer_first(buf, q_chan)" in source
+assert "phase" in source
 
 import threading
 import urllib.request
@@ -248,12 +250,13 @@ api.AUDIO_BACKEND_STATUS_FILE.write_text(
             "pcm_bytes": 4096,
             "rms_level": 0.25,
             "squelch_state": "open",
+            "phase": "iio_streaming",
         }
     ),
     encoding="utf-8",
 )
 running_status = api.audio_status()["audio"]
-if running_status["pcm_bytes"] != 4096 or running_status["iio_refills"] != 2 or running_status["squelch_state"] != "open":
+if running_status["pcm_bytes"] != 4096 or running_status["iio_refills"] != 2 or running_status["squelch_state"] != "open" or running_status["phase"] != "iio_streaming":
     raise SystemExit("audio backend running metrics did not propagate to audio status")
 api.clear_audio_backend_status()
 api.AUDIO_STATE_FILE.write_text(
@@ -341,6 +344,8 @@ assert "audio_sink_open_failed" in source
 assert "sink = open_audio_sink(fifo);" in source
 assert "iio_context_set_timeout" in source
 assert "pcm_bytes" in source
+assert "iio_buffer_first(buf, q_chan)" in source
+assert "phase" in source
 
 import threading
 import urllib.request

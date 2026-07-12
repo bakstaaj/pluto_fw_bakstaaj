@@ -505,8 +505,8 @@ Behavior:
   non-producing process. Fatal backend startup details are also mirrored through
   `/var/run/pluto-radio/audio-backend-status.json` for diagnostics. While
   running, the same sidecar reports backend progress fields such as
-  `audio.iio_refills`, `audio.pcm_bytes`, `audio.rms_level`, and
-  `audio.squelch_state`; a live session that cannot refill an IIO buffer is
+  `audio.iio_refills`, `audio.pcm_bytes`, `audio.phase`, `audio.rms_level`,
+  and `audio.squelch_state`; a live session that cannot refill an IIO buffer is
   converted to `audio.state=error` instead of remaining silently idle.
 
 Audio streams:
