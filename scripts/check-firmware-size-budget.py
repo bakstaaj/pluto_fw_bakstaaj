@@ -32,6 +32,7 @@ CUSTOM_PAYLOADS = (
     "buildroot/board/pluto/pluto-audio-backend",
     "buildroot/board/pluto/pluto-audio-dsp/pluto-audio-backend.c",
     "buildroot/board/pluto/pluto-audio-dsp/pluto-loopback-backend.c",
+    "buildroot/board/pluto/pluto-audio-dsp/pluto-spectrum-backend.c",
     "buildroot/board/pluto/pluto-audio-sim-backend",
     "buildroot/board/pluto/pluto-doppler-worker",
     "buildroot/board/pluto/web/*.html",

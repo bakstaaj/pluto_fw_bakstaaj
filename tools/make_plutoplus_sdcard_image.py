@@ -18,6 +18,7 @@ import hashlib
 import lzma
 import math
 import os
+import shutil
 import struct
 import subprocess
 import tempfile
@@ -440,6 +441,8 @@ def write_fat32_partition(
 def make_ext4_image(size_bytes: int, label: str) -> bytes:
     with tempfile.TemporaryDirectory(prefix="pluto-ext4-") as tmp:
         image_path = Path(tmp) / "data.ext4"
+        sentinel = Path(tmp) / ".pluto-data-initialized"
+        sentinel.write_text("created by bakstaaj Pluto firmware SD image\n", encoding="utf-8")
         subprocess.run(
             [
                 "mke2fs",
@@ -458,6 +461,14 @@ def make_ext4_image(size_bytes: int, label: str) -> bytes:
             ],
             check=True,
         )
+        debugfs = shutil.which("debugfs")
+        if debugfs:
+            subprocess.run(
+                [debugfs, "-w", "-R", f"write {sentinel} /.pluto-data-initialized", str(image_path)],
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
         return read_file(image_path)
 
 

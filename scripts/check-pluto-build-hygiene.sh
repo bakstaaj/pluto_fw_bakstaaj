@@ -122,6 +122,17 @@ if grep -R -n -i "$legacy_web_token" "${no_legacy_web_files[@]}"; then
 	exit 1
 fi
 
+if ! grep -q 'LIQUID_DSP_CFLAGS += -mcpu=cortex-a9 -mfpu=neon -mfloat-abi=hard' \
+	buildroot/package/liquid-dsp/liquid-dsp.mk; then
+	echo "Missing Cortex-A9 liquid-dsp CPU/FPU guardrail" >&2
+	exit 1
+fi
+if ! grep -q 'LIQUID_DSP_CONF_OPTS += --enable-simdoverride' \
+	buildroot/package/liquid-dsp/liquid-dsp.mk; then
+	echo "Missing liquid-dsp SIMD override guardrail" >&2
+	exit 1
+fi
+
 crlf_report="${TMPDIR:-/tmp}/check-pluto-build-hygiene.crlf.$$"
 : > "$crlf_report"
 for file in "${files[@]}"; do
