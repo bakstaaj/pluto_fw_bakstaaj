@@ -503,7 +503,11 @@ Behavior:
   `audio.last_error` and force `audio.state` to `error`. The backend retries an
   interrupted FIFO sink open (`EINTR`) instead of silently becoming a live but
   non-producing process. Fatal backend startup details are also mirrored through
-  `/var/run/pluto-radio/audio-backend-status.json` for diagnostics.
+  `/var/run/pluto-radio/audio-backend-status.json` for diagnostics. While
+  running, the same sidecar reports backend progress fields such as
+  `audio.iio_refills`, `audio.pcm_bytes`, `audio.rms_level`, and
+  `audio.squelch_state`; a live session that cannot refill an IIO buffer is
+  converted to `audio.state=error` instead of remaining silently idle.
 
 Audio streams:
 

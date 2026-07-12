@@ -80,6 +80,8 @@ assert "errno == EINTR" in source
 assert "PLUTO_AUDIO_BACKEND_STATUS_FILE" in source
 assert "audio_sink_open_failed" in source
 assert "sink = open_audio_sink(fifo);" in source
+assert "iio_context_set_timeout" in source
+assert "pcm_bytes" in source
 
 import threading
 import urllib.request
@@ -222,6 +224,37 @@ api.AUDIO_BACKEND_STATUS_FILE.write_text(
 failed_status = api.audio_status()["audio"]
 if failed_status["state"] != "error" or failed_status["last_error"]["code"] != "audio_sink_open_failed":
     raise SystemExit("audio backend sidecar failure did not propagate to audio status")
+api.AUDIO_STATE_FILE.write_text(
+    json.dumps(
+        {
+            "state": "running",
+            "profile": "NOAA_NFM",
+            "demod_mode": "nfm",
+            "audio_rate_hz": 8000,
+            "stream_format": "pcm_s16le",
+            "fifo_path": str(api.AUDIO_FIFO),
+            "pid": os.getpid(),
+            "backend": "external",
+        }
+    ),
+    encoding="utf-8",
+)
+api.AUDIO_BACKEND_STATUS_FILE.write_text(
+    json.dumps(
+        {
+            "state": "running",
+            "pid": os.getpid(),
+            "iio_refills": 2,
+            "pcm_bytes": 4096,
+            "rms_level": 0.25,
+            "squelch_state": "open",
+        }
+    ),
+    encoding="utf-8",
+)
+running_status = api.audio_status()["audio"]
+if running_status["pcm_bytes"] != 4096 or running_status["iio_refills"] != 2 or running_status["squelch_state"] != "open":
+    raise SystemExit("audio backend running metrics did not propagate to audio status")
 api.clear_audio_backend_status()
 api.AUDIO_STATE_FILE.write_text(
     json.dumps(
@@ -306,6 +339,8 @@ assert "errno == EINTR" in source
 assert "PLUTO_AUDIO_BACKEND_STATUS_FILE" in source
 assert "audio_sink_open_failed" in source
 assert "sink = open_audio_sink(fifo);" in source
+assert "iio_context_set_timeout" in source
+assert "pcm_bytes" in source
 
 import threading
 import urllib.request
