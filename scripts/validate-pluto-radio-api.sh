@@ -99,6 +99,7 @@ PLUTO_RADIO_API_MODE=lighttpd-python-http "$python_bin" - "$api" "$tmp_stream_di
 import importlib.util
 import json
 import os
+import subprocess
 import sys
 import threading
 import time
@@ -120,6 +121,34 @@ api.AUDIO_FIFO = state_dir / "audio.pcm"
 os.environ["PLUTO_RADIO_DRY_RUN"] = "0"
 state_dir.mkdir(parents=True, exist_ok=True)
 os.mkfifo(api.AUDIO_FIFO)
+fake_backend = state_dir / "fake-sim-backend"
+fake_backend.write_text("#!/bin/sh\nsleep 1\n", encoding="utf-8")
+fake_backend.chmod(0o755)
+old_backend = subprocess.Popen(["sh", "-c", "sleep 30"])
+api.AUDIO_STATE_FILE.write_text(
+    json.dumps(
+        {
+            "state": "running",
+            "profile": "NOAA_NFM",
+            "demod_mode": "nfm",
+            "audio_rate_hz": 8000,
+            "stream_format": "pcm_s16le",
+            "fifo_path": str(api.AUDIO_FIFO),
+            "pid": old_backend.pid,
+            "backend": "validation",
+        }
+    ),
+    encoding="utf-8",
+)
+api.SIM_AUDIO_BACKEND = fake_backend
+api.start_audio({"profile": "NOAA_NFM", "simulate": "true"})
+switched = json.loads(api.AUDIO_STATE_FILE.read_text(encoding="utf-8"))
+if switched.get("backend") != "simulated_pcm":
+    raise SystemExit("simulate=true did not switch a running external audio backend")
+if switched.get("backend_path") != str(fake_backend):
+    raise SystemExit("simulate=true did not select the simulated audio backend path")
+api.stop_audio()
+old_backend.wait(timeout=2)
 api.AUDIO_STATE_FILE.write_text(
     json.dumps(
         {

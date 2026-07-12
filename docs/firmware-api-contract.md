@@ -482,6 +482,14 @@ Behavior:
 - Optionally applies profile/frequency before streaming.
 - Starts `/usr/sbin/pluto-audio-backend` for production audio.
 - Uses `/usr/sbin/pluto-audio-sim-backend` when `simulate=true`.
+- If audio is already running, an identical start request is idempotent and
+  returns the current state. A start request that changes profile, controls, or
+  backend mode stops the current backend and launches the requested backend.
+- `audio.backend` is a status enum:
+  - `external`: production or environment-overridden backend.
+  - `simulated_pcm`: `/usr/sbin/pluto-audio-sim-backend` selected by
+    `simulate=true`.
+  - `dry_run`: host validation mode.
 - Tracks state in `/var/run/pluto-radio/audio.json`.
 
 Audio streams:

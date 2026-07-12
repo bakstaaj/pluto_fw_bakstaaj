@@ -70,6 +70,9 @@ The second milestone adds the firmware API and supervision surface for audio:
 The API validates audio-capable profiles, records stream state, reports backend
 errors as JSON, and exposes audio status through system health. A simulated PCM
 backend is included so app and browser integration can be tested without RF.
+Audio start requests are idempotent only when the requested profile, controls,
+and backend mode match the current running session; changing from live RF to
+`simulate=true` restarts the backend and switches to simulated PCM.
 
 The production demodulator is intentionally isolated behind
 `/usr/sbin/pluto-audio-backend`. That executable is launched with profile,
