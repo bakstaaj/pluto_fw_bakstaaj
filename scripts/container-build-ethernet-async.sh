@@ -1,23 +1,94 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-cd /work/src
+usage() {
+    cat >&2 <<'EOF'
+Expected container layout for this wrapper:
+  /host     = bind-mounted host firmware checkout
+  /work/src = container-internal firmware source tree
+
+Run it like this from the host checkout:
+  docker run --name pluto-fw-build-current \
+    -v "$PWD:/host" \
+    -v pluto-fw-async-work-0611b:/work \
+    -v pluto-fw-dl:/dl \
+    -v pluto-fw-ccache:/ccache \
+    -w /work/src \
+    -e HOME=/tmp \
+    -e BR2_DL_DIR=/dl \
+    -e CCACHE_DIR=/ccache \
+    pluto-fw-v039 \
+    bash -lc '/host/scripts/container-build-ethernet-async.sh'
+
+Do not bind-mount the host repo onto /work or /work/src for this wrapper. The /work mount must be a Linux Docker volume containing the prepared firmware source tree at /work/src.
+
+Run host-side validation from /host (for example,
+`bash /host/scripts/validate-pluto-radio-api.sh`). The internal /work/src tree
+is deliberately limited to firmware build inputs and does not contain every
+repository validation helper.
+
+The build creates pluto-sdcard.img by default. Set BUILD_MODE=debug for a
+fast flashable SD image without release ZIP/checksum packaging, or
+BUILD_MODE=release for the full release folder. Set BUILD_SD_IMAGE=0 only when
+an SD image is intentionally not required. Set SD_OEM_DIR only to replace the
+retained OEM SD boot assets.
+EOF
+}
+
+die() {
+    echo "ERROR: $*" >&2
+    usage
+    exit 2
+}
+
+host_dir="${HOST_DIR:-/host}"
+work_dir="${WORK_DIR:-/work/src}"
+
+[ -d "$host_dir" ] || die "missing host checkout mount at $host_dir"
+[ -d "$work_dir" ] || die "missing container source tree at $work_dir"
+[ -f "$host_dir/scripts/container-build-ethernet-async.sh" ] || die "missing wrapper at $host_dir/scripts/container-build-ethernet-async.sh"
+[ -f "$work_dir/Makefile" ] || die "missing firmware Makefile under $work_dir; the build image must provide the internal source tree"
+
+host_real="$(cd "$host_dir" && pwd -P)"
+work_real="$(cd "$work_dir" && pwd -P)"
+[ "$host_real" != "$work_real" ] || die "$host_dir and $work_dir resolve to the same directory; this wrapper copies patched host files into the internal source tree"
+
+if [ "${PLUTO_BUILD_PREFLIGHT_ONLY:-0}" = "1" ]; then
+    echo "preflight ok: host_dir=$host_real work_dir=$work_real"
+    exit 0
+fi
+
+cd "$work_dir"
 
 target_name="pluto"
 package_label="${PACKAGE_LABEL:-ethernet-async}"
-default_out="/host/build-ethernet-async-fw-plutoplus-clg400"
-asset_dir="${ASSET_DIR:-/host/build-assets/pluto-plus-clg400}"
+default_out="$host_dir/build-ethernet-async-fw-plutoplus-clg400"
+asset_dir="${ASSET_DIR:-$host_dir/build-assets/pluto-plus-clg400}"
 out="${OUT_DIR:-$default_out}"
+sd_oem_dir="${SD_OEM_DIR:-$asset_dir/oem-sd}"
+build_sd_image="${BUILD_SD_IMAGE:-1}"
+build_mode="${BUILD_MODE:-release}"
+case "$build_mode" in
+	debug|release) ;;
+	*) die "BUILD_MODE must be debug or release" ;;
+esac
+if [ "$build_mode" = "release" ]; then
+	release_artifacts="${RELEASE_ARTIFACTS:-1}"
+	rebuild_audio_dsp="${REBUILD_AUDIO_DSP:-0}"
+else
+	release_artifacts="${RELEASE_ARTIFACTS:-0}"
+	rebuild_audio_dsp="${REBUILD_AUDIO_DSP:-1}"
+fi
 release_dir="build/pluto-plus-release"
 source_frm="$release_dir/pluto.frm"
 source_itb="$release_dir/pluto.itb"
-host_dir="${HOST_DIR:-/host}"
 
 copy_from_host() {
 	local rel="$1"
 	local src="$host_dir/$rel"
 	local dst="$rel"
 
+	[ -e "$src" ] || die "missing patched file from host: $src"
 	cp "$src" "$dst"
 }
 
@@ -26,6 +97,7 @@ copy_tree_from_host() {
 	local src="$host_dir/$rel"
 	local dst="$rel"
 
+	[ -e "$src" ] || die "missing patched tree from host: $src"
 	rm -rf "$dst"
 	mkdir -p "$(dirname "$dst")"
 	cp -a "$src" "$dst"
@@ -63,6 +135,10 @@ patched_files=(
 	buildroot/board/pluto/pluto-radio/profiles/NOAA_NFM.json \
 	buildroot/board/pluto/pluto-radio/profiles/SAT_AUDIO_NFM.json \
 	buildroot/board/pluto/pluto-radio/profiles/SAT_CW.json \
+	buildroot/board/pluto/pluto-radio/profiles/CB_AM_HAMITUP.json \
+	buildroot/board/pluto/pluto-radio/profiles/UHF_AUDIO_NFM_LOOPBACK.json \
+	buildroot/board/pluto/pluto-radio/profiles/UHF_CW_LOOPBACK.json \
+	buildroot/board/pluto/pluto-radio/profiles/VHF_AUDIO_NFM_LOOPBACK.json \
 	buildroot/board/pluto/pluto-radio/profiles/TX_AUDIO_AM.json \
 	buildroot/board/pluto/pluto-radio/profiles/TX_AUDIO_FM.json \
 	buildroot/board/pluto/pluto-radio/profiles/TX_CW.json \
@@ -87,6 +163,12 @@ patched_files=(
 )
 
 mkdir -p "$release_dir" build "$asset_dir" "$out"
+if [ "$release_artifacts" != "1" ]; then
+	rm -f \
+		"$out/SHA256SUMS.txt" \
+		"$out/pluto-sdcard-files.zip" \
+		"$out"/plutosdr-fw-plutoplus-*-clg400-complete.zip
+fi
 
 copy_from_host buildroot/board/pluto/S21misc
 copy_from_host buildroot/board/pluto/S40network
@@ -115,6 +197,10 @@ copy_from_host buildroot/board/pluto/pluto-radio/profiles/LOOPBACK_TEST.json
 copy_from_host buildroot/board/pluto/pluto-radio/profiles/NOAA_NFM.json
 copy_from_host buildroot/board/pluto/pluto-radio/profiles/SAT_AUDIO_NFM.json
 copy_from_host buildroot/board/pluto/pluto-radio/profiles/SAT_CW.json
+copy_from_host buildroot/board/pluto/pluto-radio/profiles/CB_AM_HAMITUP.json
+copy_from_host buildroot/board/pluto/pluto-radio/profiles/UHF_AUDIO_NFM_LOOPBACK.json
+copy_from_host buildroot/board/pluto/pluto-radio/profiles/UHF_CW_LOOPBACK.json
+copy_from_host buildroot/board/pluto/pluto-radio/profiles/VHF_AUDIO_NFM_LOOPBACK.json
 copy_from_host buildroot/board/pluto/pluto-radio/profiles/TX_AUDIO_AM.json
 copy_from_host buildroot/board/pluto/pluto-radio/profiles/TX_AUDIO_FM.json
 copy_from_host buildroot/board/pluto/pluto-radio/profiles/TX_CW.json
@@ -201,6 +287,16 @@ cp "$source_frm" "$asset_dir/pluto-plus-source.frm"
 cp build/boot.frm "$asset_dir/boot.frm"
 cp build/boot.dfu "$asset_dir/boot.dfu"
 
+if [ "$build_sd_image" = "1" ]; then
+	for required_oem_file in BOOT.bin uEnv.txt devicetree.dtb; do
+		[ -f "$sd_oem_dir/$required_oem_file" ] || {
+			echo "Missing retained SD boot asset: $sd_oem_dir/$required_oem_file" >&2
+			echo "Set SD_OEM_DIR to a directory containing BOOT.bin, uEnv.txt, and devicetree.dtb." >&2
+			exit 1
+		}
+	done
+fi
+
 make -C buildroot ARCH=arm "zynq_${target_name}_defconfig"
 if grep -q '^BR2_PACKAGE_E2FSPROGS_RESIZE2FS=y$' buildroot/.config && \
 	[ -d buildroot/output/build/e2fsprogs-1.46.5 ] && \
@@ -209,14 +305,28 @@ if grep -q '^BR2_PACKAGE_E2FSPROGS_RESIZE2FS=y$' buildroot/.config && \
 	make -C buildroot e2fsprogs-dirclean
 fi
 if ! grep -q '^BR2_PACKAGE_FFTW_SINGLE=y$' buildroot/.config; then
-	echo "BR2_PACKAGE_FFTW_SINGLE is disabled; rebuilding liquid-dsp/pluto-audio-dsp without stale FFTW-single artifacts"
-	rm -rf \
-		buildroot/output/build/liquid-dsp-1.4.0 \
-		buildroot/output/build/pluto-audio-dsp \
-		buildroot/output/build/fftw-single-* \
-		buildroot/output/target/usr/lib/libfftw3f* \
-		buildroot/output/host/arm-buildroot-linux-gnueabihf/sysroot/usr/lib/libfftw3f* \
-		buildroot/output/host/arm-buildroot-linux-gnueabihf/sysroot/usr/lib/pkgconfig/fftw3f.pc
+	stale_fftw="$(
+		find \
+			buildroot/output/build \
+			buildroot/output/target/usr/lib \
+			buildroot/output/host/arm-buildroot-linux-gnueabihf/sysroot/usr/lib \
+			-name 'fftw-single-*' -o -name 'libfftw3f*' -o -name 'fftw3f.pc' \
+			-print -quit 2>/dev/null || true
+	)"
+	if [ "${FORCE_AUDIO_DSP_CLEAN:-0}" = "1" ] || [ -n "$stale_fftw" ]; then
+		echo "BR2_PACKAGE_FFTW_SINGLE is disabled; removing stale FFTW-single/audio DSP build artifacts"
+		rm -rf \
+			buildroot/output/build/liquid-dsp-1.4.0 \
+			buildroot/output/build/pluto-audio-dsp \
+			buildroot/output/build/fftw-single-* \
+			buildroot/output/target/usr/lib/libfftw3f* \
+			buildroot/output/host/arm-buildroot-linux-gnueabihf/sysroot/usr/lib/libfftw3f* \
+			buildroot/output/host/arm-buildroot-linux-gnueabihf/sysroot/usr/lib/pkgconfig/fftw3f.pc
+	fi
+fi
+if [ "$rebuild_audio_dsp" = "1" ]; then
+	echo "Rebuilding pluto-audio-dsp package for debug/source changes"
+	make -C buildroot pluto-audio-dsp-rebuild
 fi
 
 if [ -f "$asset_dir/system_top.bit" ] && [ "${REFRESH_BIT:-0}" != "1" ]; then
@@ -281,19 +391,28 @@ rm -f \
 	build/zynq-pluto-sdr-revb.dtb \
 	build/zynq-pluto-sdr-revc.dtb
 
+make_targets=(
+	build/pluto.frm
+	build/pluto.dfu
+	build/uboot-env.dfu
+	build/config.frm
+)
+if [ "$release_artifacts" = "1" ]; then
+	make_targets+=(zip-all)
+fi
 make -o build/system_top.bit \
 	TARGET="$target_name" \
 	SKIP_LEGAL=1 \
-	build/pluto.frm \
-	build/pluto.dfu \
-	build/uboot-env.dfu \
-	build/config.frm \
-	zip-all
+	"${make_targets[@]}"
 
-zip_archive=$(ls -t build/plutosdr-fw-*.zip | head -n 1)
-zip_name=$(basename "$zip_archive")
 complete_zip="plutosdr-fw-plutoplus-${package_label}-clg400-complete.zip"
 export COMPLETE_ZIP="$complete_zip"
+zip_archive=""
+zip_name=""
+if [ "$release_artifacts" = "1" ]; then
+	zip_archive=$(ls -t build/plutosdr-fw-*.zip | head -n 1)
+	zip_name=$(basename "$zip_archive")
+fi
 
 u-boot-xlnx/tools/dumpimage \
 	-i build/pluto.itb \
@@ -312,8 +431,10 @@ cp \
 	build/pluto.dfu \
 	build/uboot-env.dfu \
 	build/config.frm \
-	"$zip_archive" \
 	"$out/"
+if [ "$release_artifacts" = "1" ]; then
+	cp "$zip_archive" "$out/"
+fi
 
 cp build/system_top.bit "$out/system_top.bit"
 cp "$source_frm" "$out/pluto-plus-source.frm"
@@ -332,12 +453,29 @@ for extra_artifact in \
 	fi
 done
 
+if [ "$build_sd_image" = "1" ]; then
+	sd_image_args=(
+		python3 "$host_dir/tools/make_bakstaaj_release.py"
+		--sd-image-only \
+		--repo "$host_dir" \
+		--source-dir "$out" \
+		--oem-dir "$sd_oem_dir" \
+		--out-dir "$out"
+	)
+	if [ "$release_artifacts" != "1" ]; then
+		sd_image_args+=(--skip-hashes --skip-sd-files-zip)
+	fi
+	"${sd_image_args[@]}"
+fi
+
 cat > "$out/BUILD_MANIFEST.txt" <<EOF
 Pluto Plus $package_label firmware package
 
 Install files:
 - pluto.frm
 - config.frm
+- pluto-sdcard.img: raw SD boot image with 100 MiB FAT32 boot and 100 MiB
+  ext4 PLUTO_DATA partitions. The firmware expands PLUTO_DATA on first boot.
 
 Recommended full deployment:
 - Set the Pluto Plus USB reset jumper to USRT-MIO52.
@@ -415,6 +553,10 @@ EOF
 
 (
 	cd "$out"
+	if [ "$release_artifacts" != "1" ]; then
+		echo "Debug build complete: skipped complete ZIP and SHA256SUMS packaging"
+		exit 0
+	fi
 	rm -f plutosdr-fw-plutoplus-*-clg400-complete.zip
 	python3 - <<'PY'
 import zipfile
@@ -430,6 +572,8 @@ names = [
     "uboot-env.dfu",
     "config.frm",
     "FULL_DFU_UPDATE.bat",
+    "pluto-sdcard.img",
+    "pluto-sdcard-files.zip",
 ]
 zip_name = os.environ["COMPLETE_ZIP"]
 with zipfile.ZipFile(zip_name, "w", zipfile.ZIP_DEFLATED) as zf:
@@ -450,6 +594,8 @@ PY
 		pluto-plus-source.itb \
 		pluto.itb \
 		FULL_DFU_UPDATE.bat \
+		pluto-sdcard.img \
+		pluto-sdcard-files.zip \
 		"$zip_name" \
 		"$complete_zip" \
 		> SHA256SUMS.txt

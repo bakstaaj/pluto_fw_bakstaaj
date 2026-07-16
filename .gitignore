@@ -39,4 +39,19 @@ build/
 build-*/
 !build-assets/
 !build-assets/**
+build-assets/**/oem-sd/
 .Xil
+
+# Generated release/package artifacts
+release-packages/
+*.zip
+*.img
+
+# Local tool/test artifacts
+tools/gh/
+handoff.md
+pluto-passes-test.json
+
+# Python cache artifacts
+__pycache__/
+*.py[cod]

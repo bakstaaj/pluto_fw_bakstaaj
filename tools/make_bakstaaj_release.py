@@ -379,6 +379,21 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--out-dir", type=Path, default=None)
     parser.add_argument("--sd-image-mib", type=int, default=201)
     parser.add_argument("--sd-boot-mib", type=int, default=100)
+    parser.add_argument(
+        "--sd-image-only",
+        action="store_true",
+        help="Create SD boot artifacts from an existing completed build without repackaging its rootfs.",
+    )
+    parser.add_argument(
+        "--skip-hashes",
+        action="store_true",
+        help="Skip SHA256SUMS.txt generation for fast debug image builds.",
+    )
+    parser.add_argument(
+        "--skip-sd-files-zip",
+        action="store_true",
+        help="Skip pluto-sdcard-files.zip generation for fast debug image builds.",
+    )
     return parser.parse_args()
 
 
@@ -394,6 +409,38 @@ def main() -> None:
     firmware_dir = release_dir / "firmware"
     sdcard_dir = release_dir / "sdcard"
     sdimg_dir = sdcard_dir / "sdimg"
+
+    if args.sd_image_only:
+        # The container build has already produced the final rootfs. Reusing it
+        # here keeps the SD image byte-for-byte aligned with that build.
+        source_rootfs = read_file(source_dir / "rootfs.cpio.gz")
+        for name in ("zImage",):
+            if not (source_dir / name).is_file():
+                raise FileNotFoundError(f"missing completed build artifact: {source_dir / name}")
+        for name in ("BOOT.bin", "uEnv.txt", "devicetree.dtb"):
+            if not (oem_dir / name).is_file():
+                raise FileNotFoundError(f"missing OEM SD boot artifact: {oem_dir / name}")
+
+        sdimg_dir.mkdir(parents=True, exist_ok=True)
+        sd_files = make_sd_files(repo, oem_dir, source_dir, source_rootfs)
+        for name, data in sd_files.items():
+            write_file(sdimg_dir / name, data)
+        sd_files_zip = release_dir / "pluto-sdcard-files.zip"
+        if not args.skip_sd_files_zip:
+            zip_dir(sdimg_dir, sd_files_zip)
+        make_fat32_ext4_image(
+            make_fat32_sd_files(sd_files),
+            release_dir / "pluto-sdcard.img",
+            image_mib=args.sd_image_mib,
+            boot_mib=args.sd_boot_mib,
+        )
+        if not args.skip_hashes:
+            write_hashes(release_dir)
+        print(f"Wrote {release_dir / 'pluto-sdcard.img'}")
+        if not args.skip_sd_files_zip:
+            print(f"Wrote {sd_files_zip}")
+        return
+
     for path in (firmware_dir, sdimg_dir):
         path.mkdir(parents=True, exist_ok=True)
 

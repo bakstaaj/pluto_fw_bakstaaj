@@ -49,7 +49,7 @@ The Pluto-hosted radio API documentation and endpoint test page is available at:
 http://192.168.2.1/api-test.html
 ```
 
-The full app-builder API contract is maintained in `docs/firmware-api-contract.md`.
+The full app-builder API contract is maintained in `docs/firmware-api-contract_1.md`.
 Sample app clients for Python and browser-based applications are in `examples/`.
 
 ### Recommended Windows Burn Tools
@@ -101,6 +101,47 @@ If an image writer is not available, use the copy-files package only on a card t
 5. Eject the card cleanly before booting the Pluto board.
 
 The raw `.img` method is preferred because it also recreates the expected FAT boot volume layout. If the copy-files method does not boot, reburn the raw image.
+
+### In-Place SD Boot File Update
+
+For an already-running SD-boot Pluto, debug firmware can be deployed without
+reburning the whole card. This updates only the FAT32 boot partition
+(`/dev/mmcblk0p1`) and leaves the ext4 data partition (`/dev/mmcblk0p2`,
+mounted at `/media`) intact.
+
+Do not write the raw `*-sdcard.img` to `/dev/mmcblk0` from the running Pluto.
+Use the `*-sdcard-files.zip` package instead.
+
+From MSYS2/Git Bash on the development machine:
+
+```sh
+cd "/c/Users/jim/OneDrive/Documents/Pluto Firmware"
+
+PLUTO_HOST=192.168.2.1 \
+PLUTO_PASS=analog \
+SD_BOOT_FILES_ZIP="/c/Users/jim/OneDrive/Documents/Pluto Firmware/build-ethernet-async-fw-fm-channel-filter/pluto-sdcard-files.zip" \
+bash scripts/deploy-pluto-sd-boot-files.sh
+```
+
+The script validates the ZIP layout, uploads it with `scp -O`, verifies the
+SHA-256 hash on the Pluto, mounts `/dev/mmcblk0p1`, backs up the current boot
+files under `/media/fw-backups/sdboot-*`, copies `BOOT.bin`,
+`devicetree.dtb`, `uEnv.txt`, `uImage`, and `uramdisk.image.gz`, syncs,
+unmounts, and reboots.
+
+To stage the files without rebooting:
+
+```sh
+REBOOT_AFTER_UPDATE=0 bash scripts/deploy-pluto-sd-boot-files.sh
+```
+
+After the Pluto returns, verify the expected radio profiles:
+
+```sh
+PLUTO_HOST=192.168.2.1 \
+PLUTO_PASS=analog \
+bash scripts/check-pluto-profiles-after-sdboot-update.sh
+```
 
 ## Recommended Full Deployment From DFU
 

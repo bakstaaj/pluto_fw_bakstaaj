@@ -43,19 +43,19 @@ spec = importlib.util.spec_from_loader("pluto_radio_api_sample_rate_validation",
 api = importlib.util.module_from_spec(spec)
 loader.exec_module(api)
 
-floor = api.MIN_AD9361_NO_FIR_SAMPLE_RATE_HZ
-assert floor == 2083334
+floor = api.MIN_AD9361_SAMPLE_RATE_HZ
+assert floor == 520833
 assert api.parse_iio_available_range("[2083333 1 61440000]")["min"] == 2083333
 for path in sorted(profile_dir.glob("*.json")):
     payload = json.loads(path.read_text(encoding="utf-8"))
     if int(payload["sample_rate_hz"]) < floor:
-        raise SystemExit(f"{path.name} sample_rate_hz is below AD9361 no-FIR floor")
+        raise SystemExit(f"{path.name} sample_rate_hz is below AD9361 floor")
 try:
     api.clean_profile(
         {
             "name": "BAD_SAMPLE_RATE",
             "default_frequency_hz": 145800000,
-            "sample_rate_hz": 1000000,
+            "sample_rate_hz": 100000,
             "rf_bandwidth_hz": 200000,
         },
         profile_dir / "BAD_SAMPLE_RATE.json",
@@ -79,11 +79,19 @@ source = Path("buildroot/board/pluto/pluto-audio-dsp/pluto-audio-backend.c").rea
 assert "errno == EINTR" in source
 assert "PLUTO_AUDIO_BACKEND_STATUS_FILE" in source
 assert "audio_sink_open_failed" in source
-assert "sink = open_audio_sink(fifo);" in source
+assert "sink = open_audio_sink(fifo, regular_sink);" in source
 assert "iio_context_set_timeout" in source
 assert "pcm_bytes" in source
 assert "iio_buffer_first(buf, q_chan)" in source
 assert "phase" in source
+assert "dsp_push_iq" in source
+assert "dsp->iq_decim" in source
+assert "processing_sample_rate_hz" in source
+assert "pcm_rate_hz" in source
+assert "PLUTO_AUDIO_FM_CHANNEL_FILTER" in source
+assert "PLUTO_AUDIO_FM_LIMITER" in source
+assert "fm_channel_filter" in source
+assert "fm_limiter" in source
 
 import threading
 import urllib.request
@@ -135,6 +143,7 @@ done
 
 "$python_bin" "$api" audio-start NOAA_NFM --simulate >/dev/null
 "$python_bin" "$api" audio-status >/dev/null
+"$python_bin" "$api" demod-self-test --simulate >/dev/null
 "$python_bin" "$api" audio-stop >/dev/null
 tmp_stream_dir="$(mktemp -d "${TMPDIR:-/tmp}/pluto-audio-stream-test.XXXXXX")"
 tmp_stream_out="${TMPDIR:-/tmp}/pluto-audio-stream-test.$$.out"
@@ -164,12 +173,16 @@ api = importlib.util.module_from_spec(spec)
 loader.exec_module(api)
 
 api.STATE_DIR = state_dir
+api.STATE_FILE = state_dir / "state.json"
 api.AUDIO_BACKEND_STATUS_FILE = state_dir / "audio-backend-status.json"
 api.AUDIO_STATE_FILE = state_dir / "audio.json"
 api.AUDIO_FIFO = state_dir / "audio.pcm"
 os.environ["PLUTO_RADIO_DRY_RUN"] = "0"
 state_dir.mkdir(parents=True, exist_ok=True)
-os.mkfifo(api.AUDIO_FIFO)
+if hasattr(os, "mkfifo"):
+    os.mkfifo(api.AUDIO_FIFO)
+else:
+    api.AUDIO_FIFO.write_bytes(b"\x00" * 32768)
 fake_backend = state_dir / "fake-sim-backend"
 fake_backend.write_text("#!/bin/sh\nsleep 1\n", encoding="utf-8")
 fake_backend.chmod(0o755)
@@ -258,7 +271,51 @@ api.AUDIO_BACKEND_STATUS_FILE.write_text(
 running_status = api.audio_status()["audio"]
 if running_status["pcm_bytes"] != 4096 or running_status["iio_refills"] != 2 or running_status["squelch_state"] != "open" or running_status["phase"] != "iio_streaming":
     raise SystemExit("audio backend running metrics did not propagate to audio status")
+os.environ["PLUTO_RADIO_DRY_RUN"] = "1"
+try:
+    retune = api.audio_retune({"profile": "NOAA_NFM", "frequency_hz": 162550000, "gain_db": 42})
+    if retune["state"]["stream_state"] != "audio":
+        raise SystemExit("audio retune did not preserve stream_state=audio")
+    if not any(item.get("attr") == "ensm_mode" and item.get("value") == "fdd" for item in retune["writes"]):
+        raise SystemExit("audio retune did not force ENSM fdd")
+finally:
+    os.environ.pop("PLUTO_RADIO_DRY_RUN", None)
+old_read_attr = api.read_attr
+try:
+    api.read_attr = lambda device, attr: "alert" if attr == "ensm_mode" else old_read_attr(device, attr)
+    wedged_status = api.audio_status()["audio"]
+    if wedged_status["state"] != "error" or wedged_status["last_error"]["code"] != "rx_chain_not_streaming":
+        raise SystemExit("audio status did not report ENSM alert while backend claimed streaming")
+finally:
+    api.read_attr = old_read_attr
 api.clear_audio_backend_status()
+if api.audio_stream_length({}, 8000) is not None:
+    raise SystemExit("omitted seconds did not default to continuous audio")
+if api.audio_stream_length({"continuous": "true"}, 8000) is not None:
+    raise SystemExit("continuous audio stream did not report unbounded length")
+if api.audio_stream_length({"seconds": "0"}, 8000) is not None:
+    raise SystemExit("seconds=0 audio stream did not report unbounded length")
+if api.audio_stream_length({"seconds": "2"}, 8000) != 32000:
+    raise SystemExit("bounded seconds=2 audio stream length was not 2 seconds of PCM")
+if api.audio_stream_wav_data_bytes(None) <= 8000 * 2:
+    raise SystemExit("continuous wav header size was not expanded for browser streaming")
+reader_fd, writer_fd = os.pipe()
+try:
+    def fifo_writer():
+        time.sleep(0.01)
+        os.write(writer_fd, b"ready")
+
+    writer_thread = threading.Thread(target=fifo_writer, daemon=True)
+    started = time.monotonic()
+    writer_thread.start()
+    if api.read_audio_fifo_chunk(reader_fd, 16, timeout_seconds=0.2) != b"ready":
+        raise SystemExit("audio FIFO readiness read did not return queued PCM")
+    if time.monotonic() - started >= 0.1:
+        raise SystemExit("audio FIFO readiness read added avoidable stream latency")
+    writer_thread.join(timeout=1)
+finally:
+    os.close(reader_fd)
+    os.close(writer_fd)
 api.AUDIO_STATE_FILE.write_text(
     json.dumps(
         {
@@ -276,6 +333,8 @@ api.AUDIO_STATE_FILE.write_text(
 )
 
 def writer():
+    if not hasattr(os, "mkfifo"):
+        return
     with api.AUDIO_FIFO.open("wb", buffering=0) as handle:
         deadline = time.time() + 3
         while time.time() < deadline:
@@ -297,6 +356,8 @@ try:
             raise SystemExit(f"unexpected live.wav HTTP status {response.status}")
         if response.headers.get("Content-Type") != "audio/wav":
             raise SystemExit("live.wav did not return audio/wav")
+        if response.headers.get("Content-Length") != str(8000 * 2 + 44):
+            raise SystemExit("bounded live.wav did not include the expected Content-Length")
         out_path.write_bytes(response.read(4096))
 finally:
     server.shutdown()
@@ -341,11 +402,15 @@ source = Path("buildroot/board/pluto/pluto-audio-dsp/pluto-audio-backend.c").rea
 assert "errno == EINTR" in source
 assert "PLUTO_AUDIO_BACKEND_STATUS_FILE" in source
 assert "audio_sink_open_failed" in source
-assert "sink = open_audio_sink(fifo);" in source
+assert "sink = open_audio_sink(fifo, regular_sink);" in source
 assert "iio_context_set_timeout" in source
 assert "pcm_bytes" in source
 assert "iio_buffer_first(buf, q_chan)" in source
 assert "phase" in source
+assert "PLUTO_AUDIO_FM_CHANNEL_FILTER" in source
+assert "PLUTO_AUDIO_FM_LIMITER" in source
+assert "fm_channel_filter" in source
+assert "fm_limiter" in source
 
 import threading
 import urllib.request
@@ -382,6 +447,8 @@ finally:
     server.server_close()
 PY
 "$python_bin" "$api" loopback-start LOOPBACK_TEST --simulate >/dev/null
+"$python_bin" "$api" loopback-demod --simulate --confirm-live-tx >/dev/null
+"$python_bin" "$api" loopback-demod-status >/dev/null
 "$python_bin" "$api" tx-start TX_TEST_TONE --simulate >/dev/null
 "$python_bin" "$api" tx-start TX_TEST_TONE --simulate tx_mode=carrier >/dev/null
 "$python_bin" "$api" tx-start TX_AUDIO_AM --simulate >/dev/null
@@ -443,6 +510,11 @@ fi
 
 if PLUTO_RADIO_DRY_RUN=0 "$python_bin" "$api" loopback-start LOOPBACK_TEST >/dev/null 2>&1; then
 	echo "live loopback started without confirmation" >&2
+	exit 1
+fi
+
+if PLUTO_RADIO_DRY_RUN=0 "$python_bin" "$api" loopback-demod simulate=0 >/dev/null 2>&1; then
+	echo "live loopback demod started without confirmation" >&2
 	exit 1
 fi
 
