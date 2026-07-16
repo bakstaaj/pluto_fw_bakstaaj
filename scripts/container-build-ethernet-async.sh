@@ -212,6 +212,7 @@ copy_from_host buildroot/board/pluto/mdev.conf
 copy_from_host buildroot/board/pluto/automounter.sh
 copy_from_host buildroot/board/pluto/pluto-eth-fallback
 copy_tree_from_host buildroot/board/pluto/web
+find buildroot/board/pluto/web -type f -exec chmod 0644 {} +
 mkdir -p buildroot/package/pluto-audio-dsp
 mkdir -p buildroot/package/python-sgp4
 copy_from_host buildroot/package/Config.in
