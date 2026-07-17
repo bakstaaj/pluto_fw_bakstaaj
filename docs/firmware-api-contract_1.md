@@ -521,8 +521,6 @@ attenuation installed:
   "loopback_frequency_hz": 915000000,
   "cw_wpm_values": [12, 20],
   "cw_text": "CQ TEST",
-  "cw_duration_seconds": 10,
-  "cw_capture_seconds": 9,
   "spectrum_center_frequency_hz": 915000000,
   "spectrum_span_hz": 200000,
   "spectrum_bins": 64,
@@ -533,10 +531,17 @@ attenuation installed:
 
 `live_loopback=true` runs bounded CW RF loopback decoder checks and requires
 `confirm_live_tx=true`. `cw_wpm_values` accepts 1 to 6 speeds from 5 to 40 WPM;
-the default bench sweep is `[12, 20]`. `live_spectrum=true` runs a bounded live
-spectrum stream smoke test and reports row count, sequence range, center
-frequency, bin count, backend name, and per-row `frame_duration_ms` values. Live
-spectrum does not transmit, but it does retune/configure the receiver.
+the default bench sweep is `[12, 20]`. If `cw_duration_seconds` is omitted,
+firmware estimates a bounded duration from `cw_text` and WPM so slow-speed tests
+capture a complete message plus setup margin. If `cw_duration_seconds` is
+provided, firmware uses the caller's explicit bounded duration. `cw_capture_seconds`
+defaults to the full chosen duration. The live CW decoder retains up to the
+firmware bounded TX limit, so low-speed self-tests are not truncated by the
+decoder window. `live_spectrum=true` runs
+a bounded live spectrum stream smoke test and reports row count, sequence range,
+center frequency, bin count, backend name, and per-row `frame_duration_ms`
+values. Live spectrum does not transmit, but it does retune/configure the
+receiver.
 
 The response includes `self_test.state` as `pass`, `warn`, or `fail` and a
 per-step result list for app diagnostics.
