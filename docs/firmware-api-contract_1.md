@@ -335,9 +335,11 @@ not need to implement these receiver-DSP details.
 Bundled audio receive profiles use the same validated low-rate FIR path unless
 the modulation requires a wider bandwidth. `SAT_AUDIO_NFM`,
 `VHF_AUDIO_NFM_LOOPBACK`, and `UHF_AUDIO_NFM_LOOPBACK` are narrowband FM audio
-profiles. `SAT_CW` and `UHF_CW_LOOPBACK` are CW monitor profiles with a
-browser-friendly BFO tone. `CB_AM_HAMITUP` is an AM audio profile for CB channel
-19 through a Ham It Up +125 MHz upconverter.
+profiles. `SAT_CW`, `VHF_CW_LOOPBACK`, and `UHF_CW_LOOPBACK` are CW monitor
+profiles with a browser-friendly BFO tone and live `audio.cw_decode` status.
+`CB_AM_HAMITUP` is an AM audio receive profile for CB channel 19 through a Ham It
+Up +125 MHz upconverter; it is a translated live-RX profile, not a Pluto TX/RX
+loopback profile.
 
 ## Guardrails and Calibration
 
@@ -1079,6 +1081,25 @@ Recommended live cabled RF pairings:
   "confirm_live_tx": true
 }
 ```
+
+For CW decoder cabled RF checks, use `VHF_CW_LOOPBACK` or `UHF_CW_LOOPBACK` with
+`TX_CW`:
+
+```json
+{
+  "rx_profile": "VHF_CW_LOOPBACK",
+  "tx_profile": "TX_CW",
+  "frequency_hz": 145800000,
+  "rx_if_offset_hz": 25000,
+  "tx_cw_text": "CQ TEST",
+  "tx_cw_wpm": 12,
+  "confirm_live_tx": true
+}
+```
+
+CB receive through `CB_AM_HAMITUP` is intentionally not listed as a loopback
+pairing because the Ham It Up upconverter is an external translated-RF receive
+path.
 
 General request shape:
 
