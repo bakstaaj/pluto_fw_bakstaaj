@@ -1047,11 +1047,11 @@ for a transmit-only test.
 
 `POST /radio/loopback/demod`
 
-Runs a bounded closed-loop FM demod diagnostic. This is different from
+Runs a bounded closed-loop FM or AM demod diagnostic. This is different from
 `/radio/loopback/start`: it uses the single-process `pluto-loopback-backend`
 full-duplex path so one process owns both TX and RX IIO buffers. This avoids the
 fragile two-process pattern where a TX backend and RX audio backend compete for
-AD9361/IIO streaming state. The backend transmits a bounded FM audio tone,
+AD9361/IIO streaming state. The backend transmits a bounded FM or AM audio tone,
 captures RX IQ through the same process, applies the requested RX IF offset, and
 reports whether the expected audio tone was recovered.
 
@@ -1097,9 +1097,27 @@ For CW decoder cabled RF checks, use `VHF_CW_LOOPBACK` or `UHF_CW_LOOPBACK` with
 }
 ```
 
-CB receive through `CB_AM_HAMITUP` is intentionally not listed as a loopback
-pairing because the Ham It Up upconverter is an external translated-RF receive
-path.
+For CB AM loopback with the current Pluto-only cabled setup, use `CB_AM_HAMITUP`
+with `TX_AUDIO_AM` at the translated Pluto RF frequency. This validates the
+firmware AM demodulator and the CB receive profile at 152.185 MHz, which
+corresponds to CB channel 19 at 27.185 MHz through a +125 MHz Ham It Up
+upconverter. It does not validate the external Ham It Up receive path unless that
+external converter is physically wired into the loopback path.
+
+```json
+{
+  "rx_profile": "CB_AM_HAMITUP",
+  "tx_profile": "TX_AUDIO_AM",
+  "frequency_hz": 152185000,
+  "rx_if_offset_hz": 0,
+  "rx_gain_db": 55,
+  "tx_gain_db": -35,
+  "tx_amplitude": 0.05,
+  "tx_audio_tone_hz": 1000,
+  "tx_am_modulation_index": 0.8,
+  "confirm_live_tx": true
+}
+```
 
 General request shape:
 
