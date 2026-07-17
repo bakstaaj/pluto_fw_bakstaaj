@@ -509,6 +509,35 @@ Optional request:
 }
 ```
 
+Optional live bench request for a Pluto with a loopback cable and suitable
+attenuation installed:
+
+```json
+{
+  "require_radio": true,
+  "live_loopback": true,
+  "live_spectrum": true,
+  "confirm_live_tx": true,
+  "loopback_frequency_hz": 915000000,
+  "cw_wpm_values": [12, 20],
+  "cw_text": "CQ TEST",
+  "cw_duration_seconds": 10,
+  "cw_capture_seconds": 9,
+  "spectrum_center_frequency_hz": 915000000,
+  "spectrum_span_hz": 200000,
+  "spectrum_bins": 64,
+  "spectrum_frames": 5,
+  "spectrum_interval_ms": 100
+}
+```
+
+`live_loopback=true` runs bounded CW RF loopback decoder checks and requires
+`confirm_live_tx=true`. `cw_wpm_values` accepts 1 to 6 speeds from 5 to 40 WPM;
+the default bench sweep is `[12, 20]`. `live_spectrum=true` runs a bounded live
+spectrum stream smoke test and reports row count, sequence range, center
+frequency, bin count, backend name, and per-row `frame_duration_ms` values. Live
+spectrum does not transmit, but it does retune/configure the receiver.
+
 The response includes `self_test.state` as `pass`, `warn`, or `fail` and a
 per-step result list for app diagnostics.
 
@@ -769,8 +798,9 @@ native clients that already know the sample format.
 
 Decoded audio is mono signed 16-bit little-endian PCM. `audio_rate_hz` from
 `/radio/audio/status` is the exact PCM sample rate; the `live.wav` header uses
-the same value. Firmware must deliver that rate continuously while a live
-reader is attached.
+the same value. This is the PCM format rate written into the stream, not a
+hard real-time minimum delivery guarantee over HTTP, USB Ethernet, or the
+browser media pipeline.
 
 `pcm_rate_hz` is the configured decoded PCM sample rate and should match
 `audio_rate_hz`, for example `48000` for NOAA_NFM. `pcm_measured_rate_hz` is
@@ -780,6 +810,14 @@ format rate. `input_sample_rate_hz`, `processing_sample_rate_hz`, and
 `iq_decimation` expose the raw AD9361 rate and the firmware's CPU-saving I/Q
 pre-decimation; applications should treat them as diagnostics and continue using
 `audio_rate_hz`/`pcm_rate_hz` as the PCM/WAV format rate.
+
+Browser clients should treat continuous audio as a real-time stream with normal
+embedded-device jitter. For smooth playback, start
+`/radio/audio/live.wav?continuous=true`, build an initial playback buffer, and
+use application-side de-jitter/reconnect handling. The firmware exposes
+`pcm_measured_rate_hz` so clients can warn or recover if sustained delivery
+falls materially below the declared PCM rate, but the contract does not promise
+that every wall-clock interval will deliver at least 48,000 samples per second.
 
 `live.wav` returns a normal HTTP response with `Content-Type: audio/wav`,
 `Cache-Control: no-store`, a blank line, and then the WAV `RIFF` body. Clients
@@ -884,6 +922,8 @@ bins=192
 top_n=5
 frames=120
 interval_ms=250
+continuous=false
+follow_doppler=false
 simulate=true
 ```
 
@@ -903,6 +943,9 @@ bounded to the requested bin count and has this shape:
   "bins": 192,
   "backend": "external_stream",
   "bounded": false,
+  "continuous": true,
+  "follow_doppler": false,
+  "frame_duration_ms": 10,
   "points": [
     {"frequency_hz": 162450000, "power_dbfs": -90.25}
   ],
@@ -913,9 +956,19 @@ bounded to the requested bin count and has this shape:
 }
 ```
 
-The stream is intentionally bounded by `frames` and
-`PLUTO_SPECTRUM_MAX_STREAM_FRAMES`; browser clients should reconnect if they
-want a continuous display beyond the current stream window.
+For normal bounded diagnostics, `frames` limits the number of rows and is capped
+by `PLUTO_SPECTRUM_MAX_STREAM_FRAMES`. For a live spectrum/waterfall display,
+set `continuous=true`; the firmware passes `frames=0` to the backend and streams
+until the client disconnects. The API terminates the backend when the client
+disconnects so reconnects do not leave an orphaned IIO buffer holder.
+
+Before starting a hardware spectrum snapshot or stream, firmware applies the
+requested profile, center frequency, gain, RF bandwidth, sample rate, and FDD
+mode. With `follow_doppler=true`, a Doppler plan must already be loaded with
+`POST /radio/doppler/plan`; each stream row uses the interpolated plan
+frequency as `center_frequency_hz`, and the backend retunes the RX LO before
+capturing that row. `frame_duration_ms` is measured backend capture/compute
+time for the row and is intended for UI performance diagnostics.
 
 ## Loopback Diagnostics
 
@@ -1062,8 +1115,8 @@ Use `GET /radio/loopback/demod/status` to retrieve the last diagnostic result.
 Runs a bounded closed-loop CW diagnostic. Firmware starts the CW RX audio
 path and bounded `TX_CW` inside the single-process `pluto-loopback-backend`
 full-duplex path. It verifies recovered RF energy/keying on the cabled loopback
-path and leaves the normal browser audio path untouched. It does not currently
-decode Morse text.
+path, decodes the received CW envelope into Morse symbols/text, and leaves the
+normal browser audio path untouched.
 
 Default receive/transmit pairing:
 
@@ -1072,8 +1125,8 @@ Default receive/transmit pairing:
   "rx_profile": "UHF_CW_LOOPBACK",
   "tx_profile": "TX_CW",
   "frequency_hz": 915000000,
-  "duration_seconds": 6,
-  "capture_seconds": 5,
+  "duration_seconds": 10,
+  "capture_seconds": 9,
   "rx_gain_db": 35,
   "tx_gain_db": -35,
   "tx_amplitude": 0.08,
@@ -1110,18 +1163,41 @@ Response fields:
       },
       "passed": true,
       "keying": {
+        "decode_supported": true,
         "requested_wpm": 12,
-        "decode_supported": false,
-        "decode_note": "This endpoint verifies recovered CW RF energy/keying. Morse text decode is not enabled yet."
-      }
+        "estimated_wpm": 12,
+        "estimated_unit_ms": 100,
+        "timing_source": "auto",
+        "expected_keyed_percent": 41.18,
+        "keyed_percent": 45.0,
+        "keying_segments": 28,
+        "decoded_runs": "M318ms/3u S98ms/1u ...",
+        "decoded_symbols": "-.-. --.- / - . ... - ",
+        "decoded_text": "CQ TEST",
+        "expected_text": "CQ TEST",
+        "matched_expected": true
+      },
+      "decoded_symbols": "-.-. --.- / - . ... - ",
+      "decoded_text": "CQ TEST"
     }
   }
 }
 ```
 
-The current CW endpoint is an RF-path/keying diagnostic, not a Morse decoder.
-Applications must treat `decode_supported=false` as authoritative until a text
-decoder is added and validated.
+The loopback decoder uses an adaptive envelope threshold, automatic timing
+estimation from received mark/space runs, unit-scale smoothing, and automatic
+mark/space polarity correction because the cabled Pluto TX/RX path can show LO
+leakage during keyed-off gaps. Applications should use
+`metrics.keying.decode_supported`, `metrics.keying.decoded_text`, and
+`metrics.keying.matched_expected` to decide whether a loopback decode was valid.
+For repeated beacon-style CW streams, `matched_expected` is true when the
+decoded text begins with the expected text followed by end-of-text or a word
+space; the capture may include the first character(s) of the next repeat.
+`requested_wpm` is the requested/generated speed for loopback; `estimated_wpm`
+and `estimated_unit_ms` are measured from the received timing and are the values
+the decoder used.
+For arbitrary off-air CW, applications should treat the decoded text as a
+best-effort diagnostic until a broader real-world CW test matrix is completed.
 
 ## Transmit
 
