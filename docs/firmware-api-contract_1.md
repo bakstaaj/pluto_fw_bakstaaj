@@ -644,6 +644,7 @@ Request:
   "agc": "fast_attack",
   "frequency_shift_hz": 400,
   "iq_mode": "normal",
+  "cw_decode_wpm": 12,
   "output_gain": 2.0,
   "noise_gate_db": -85,
   "dc_block": false
@@ -665,6 +666,10 @@ Behavior:
   `invert_i`, `invert_q`, `conjugate`, `invert_both`, `swap_invert_i`,
   `swap_invert_q`, and `swap_invert_both`. Applications should leave this at
   `normal` unless firmware diagnostics identify an I/Q ordering or sign issue.
+- For CW profiles such as `SAT_CW`, firmware enables a live rolling CW decoder
+  inside the production audio backend. `cw_decode_wpm` is an optional timing
+  hint from 0 to 60 WPM; `0` or omission means firmware starts from an adaptive
+  default and estimates timing from the received keying.
 - Starts `/usr/sbin/pluto-audio-backend` for production audio.
 - Uses `/usr/sbin/pluto-audio-sim-backend` when `simulate=true`.
 - If audio is already running, an identical start request is idempotent and
@@ -692,9 +697,35 @@ Behavior:
   `audio.input_sample_rate_hz`, `audio.frequency_shift_hz`,
   `audio.fm_channel_filter`, `audio.fm_limiter`,
   `audio.processing_sample_rate_hz`,
-  `audio.iq_decimation`, `audio.phase`, `audio.rms_level`, and
+  `audio.iq_decimation`, `audio.phase`, `audio.rms_level`,
+  `audio.cw_decode`, and
   `audio.squelch_state`; a live session that cannot refill an IIO buffer is
   converted to `audio.state=error` instead of remaining silently idle.
+- When a CW profile is running, `audio.cw_decode` is either `null` or an object
+  with live rolling decoder state:
+
+```json
+{
+  "decode_supported": true,
+  "requested_wpm": 12,
+  "estimated_wpm": 12,
+  "estimated_unit_ms": 100,
+  "keyed_percent": 41.2,
+  "keying_segments": 29,
+  "envelope_floor": 0.000001,
+  "envelope_peak": 0.02,
+  "envelope_threshold": 0.009,
+  "current_symbol": "...",
+  "decoded_symbols": "-.-. --.- / - . ... - ",
+  "decoded_text": "CQ TEST",
+  "timing_source": "streaming_auto"
+}
+```
+
+  `decoded_text` and `decoded_symbols` are rolling in-memory fields from the
+  current live audio session; they reset when the audio backend restarts. Apps
+  should treat `current_symbol` as provisional and display `decoded_text` as the
+  confirmed text stream.
 - The production backend reads Pluto AD9361 RX buffers using the kernel-reported
   `le:S12/16>>0` scan element format. Firmware sign-extends those 12-bit I/Q
   samples before demodulation; applications receive decoded PCM and do not need
