@@ -1171,6 +1171,17 @@ corresponds to CB channel 19 at 27.185 MHz through a +125 MHz Ham It Up
 upconverter. It does not validate the external Ham It Up receive path unless that
 external converter is physically wired into the loopback path.
 
+Browser applications consuming the CB AM loopback/simulation audio should expect
+a steady, clean AM-demodulated test tone, normally `1000 Hz`, rather than speech.
+A passing browser-level result is intentionally simple: the tone plays
+continuously, `audio.pcm_bytes` keeps increasing while streaming,
+`audio.rms_level` is non-null, and `audio.squelch_state` is normally
+`disabled` when squelch is disabled for the test or `open` when squelch is
+enabled and passing audio. Smooth static, periodic silence, or repeated
+buffering is not the expected result for this diagnostic; it means the app is
+not receiving the intended demodulated test stream or the AM demod/loopback path
+is not locked onto the generated carrier/modulation.
+
 ```json
 {
   "rx_profile": "CB_AM_HAMITUP",
