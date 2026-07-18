@@ -703,6 +703,73 @@ Behavior:
   `audio.cw_decode`, and
   `audio.squelch_state`; a live session that cannot refill an IIO buffer is
   converted to `audio.state=error` instead of remaining silently idle.
+### Audio Level And Squelch Status
+
+`GET /radio/audio/status` and the `audio` object embedded in
+`GET /system/health` expose live audio telemetry from the production backend.
+The two fields most applications use for activity indicators are:
+
+- `audio.rms_level`: `null` before the backend has produced its first status
+  report, after audio is stopped, or during startup/error paths that have no PCM
+  measurement yet. While streaming, it is a JSON number representing the recent
+  decoded PCM RMS level as a linear full-scale ratio. It is not dBFS. Typical
+  values are small decimals such as `0`, `0.00058`, `0.01658822`, or
+  `0.10376281`. If an app wants dBFS, compute
+  `20 * log10(max(audio.rms_level, epsilon))`.
+- `audio.squelch_state`: a string enum. Valid values are:
+  - `unknown`: no backend report has been received yet, audio is stopped, or an
+    error/startup path could not determine squelch state.
+  - `disabled`: squelch is intentionally disabled. Current firmware treats
+    `squelch_db <= -119` as disabled; common test payloads use `-120`.
+  - `open`: squelch is enabled and the backend is currently passing audio. The
+    backend includes a short hang interval, so `open` can persist briefly after
+    the level falls below threshold.
+  - `closed`: squelch is enabled and the backend is currently muting audio
+    because signal level is below `squelch_db`.
+
+`audio.squelch_state` describes the squelch gate only. `noise_gate_db` is a
+separate post-demod audio gate and does not change the squelch enum.
+
+Example stopped or pre-first-report status:
+
+```json
+{
+  "audio": {
+    "state": "stopped",
+    "rms_level": null,
+    "squelch_state": "unknown"
+  }
+}
+```
+
+Example live status with squelch disabled:
+
+```json
+{
+  "audio": {
+    "state": "running",
+    "profile": "NOAA_NFM",
+    "rms_level": 0.01658822,
+    "squelch_state": "disabled",
+    "pcm_rate_hz": 48000,
+    "pcm_measured_rate_hz": 47980.5
+  }
+}
+```
+
+Example live status with squelch enabled:
+
+```json
+{
+  "audio": {
+    "state": "running",
+    "profile": "SAT_CW",
+    "rms_level": 0.00074578,
+    "squelch_state": "open"
+  }
+}
+```
+
 - When a CW profile is running, `audio.cw_decode` is either `null` or an object
   with live rolling decoder state:
 

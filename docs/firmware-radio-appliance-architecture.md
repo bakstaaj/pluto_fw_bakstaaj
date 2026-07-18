@@ -87,6 +87,14 @@ parts stay in a maintained SDR library instead of growing into custom firmware
 code. The Python `/usr/sbin/pluto-audio-ref-backend` remains as a small
 reference/fallback path and host validation aid, not as the final quality target.
 
+Audio status is part of the API contract, not an app-local convention. The
+production backend writes `/var/run/pluto-radio/audio-backend-status.json`; the
+API merges that report into `/radio/audio/status` and `/system/health`.
+`audio.rms_level` is a nullable linear full-scale PCM RMS ratio, not dBFS.
+`audio.squelch_state` is the enum `unknown`, `disabled`, `open`, or `closed`.
+Apps should use those fields for level and gate indicators instead of inventing
+profile-specific meanings.
+
 ## Size Budget Discipline
 
 The Pluto image has tight flash constraints, especially when larger
