@@ -185,9 +185,11 @@ Loopback diagnostics:
 GET  /radio/loopback/status
 GET  /radio/loopback/demod/status
 GET  /radio/loopback/cw/status
+GET  /radio/loopback/ft8/status
 POST /radio/loopback/start
 POST /radio/loopback/demod
 POST /radio/loopback/cw
+POST /radio/loopback/ft8
 ```
 
 Transmit:
@@ -295,6 +297,18 @@ Audio and CW TX profiles add mode-specific fields:
 }
 ```
 
+FT8 loopback TX profiles add the encoded message and base audio frequency:
+
+```json
+{
+  "name": "TX_FT8_LOOPBACK",
+  "tx_mode": "ft8",
+  "tx_ft8_text": "CQ K1ABC FN42",
+  "tx_audio_tone_hz": 1500,
+  "tx_duration_limit_seconds": 30
+}
+```
+
 Applications can provide audio by writing signed 16-bit little-endian mono PCM
 to a file or FIFO under `/mnt/jffs2`, `/media`, `/tmp`, or `/var/run`, then
 starting TX with `tx_audio_source=file` and `tx_audio_path=/path/to/audio.pcm`.
@@ -313,6 +327,7 @@ tx_audio_tone_hz: 20 Hz to 3 kHz
 tx_am_modulation_index: 0.0 to 1.0
 tx_fm_deviation_hz: 100 Hz to 25 kHz and below sample_rate_hz / 8
 tx_cw_wpm: 5 to 40
+tx_ft8_text: 1 to 35 printable ASCII characters
 tx_duration_limit_seconds: 0 to PLUTO_TX_MAX_SECONDS, default 30
 loopback_duration_limit_seconds: 0 to PLUTO_LOOPBACK_MAX_SECONDS, default 10
 ```
@@ -339,7 +354,9 @@ profiles. `SAT_CW`, `VHF_CW_LOOPBACK`, and `UHF_CW_LOOPBACK` are CW monitor
 profiles with a browser-friendly BFO tone and live `audio.cw_decode` status.
 `CB_AM_HAMITUP` is an AM audio receive profile for CB channel 19 through a Ham It
 Up +125 MHz upconverter; it is a translated live-RX profile, not a Pluto TX/RX
-loopback profile.
+loopback profile. `FT8_40M_HAMITUP` uses the same converter convention for the
+7.074 MHz 40 m FT8 dial frequency, tunes Pluto to 132.074 MHz, and selects the
+native USB/FT8 decoder at 12 kHz audio rate.
 
 ## Guardrails and Calibration
 
@@ -700,7 +717,7 @@ Behavior:
   `audio.fm_channel_filter`, `audio.fm_limiter`,
   `audio.processing_sample_rate_hz`,
   `audio.iq_decimation`, `audio.phase`, `audio.rms_level`,
-  `audio.cw_decode`, and
+  `audio.cw_decode`, `audio.ft8_decode`, and
   `audio.squelch_state`; a live session that cannot refill an IIO buffer is
   converted to `audio.state=error` instead of remaining silently idle.
 ### Audio Level And Squelch Status
@@ -795,6 +812,35 @@ Example live status with squelch enabled:
   current live audio session; they reset when the audio backend restarts. Apps
   should treat `current_symbol` as provisional and display `decoded_text` as the
   confirmed text stream.
+- When `FT8_40M_HAMITUP` is running, `audio.ft8_decode` exposes the most recent
+  completed 15-second receive slot. The first partial slot after backend startup
+  is discarded. Candidate decoding runs on a worker thread so IIO refills
+  continue while the previous slot is decoded:
+
+```json
+{
+  "decode_supported": true,
+  "protocol": "FT8",
+  "state": "collecting",
+  "slot_utc": "2026-07-19T00:15:00Z",
+  "slots_completed": 4,
+  "slots_dropped": 0,
+  "decode_time_ms": 327.4,
+  "candidate_count": 12,
+  "message_count": 2,
+  "messages": [
+    {
+      "time_offset_s": 0.32,
+      "audio_frequency_hz": 1043.8,
+      "sync_score": 18,
+      "text": "CQ K1ABC FN42"
+    }
+  ]
+}
+```
+
+  `sync_score` is the decoder's Costas synchronization score; it is not an SNR
+  estimate. `slots_dropped` increments if a decode overruns the next slot.
 - The production backend reads Pluto AD9361 RX buffers using the kernel-reported
   `le:S12/16>>0` scan element format. Firmware sign-extends those 12-bit I/Q
   samples before demodulation; applications receive decoded PCM and do not need
@@ -1263,6 +1309,64 @@ Response fields:
 
 Use `GET /radio/loopback/demod/status` to retrieve the last diagnostic result.
 
+`POST /radio/loopback/ft8`
+
+Runs the bounded cabled FT8 decoder test. Connect `TX1` to `RX1` through a
+30 dB attenuator. The standard 40 m FT8 dial frequency is 7.074 MHz; because it
+is below the Pluto tuning range, this diagnostic simulates a +125 MHz
+upconverter and tunes both RF ports to 132.074 MHz.
+
+```json
+{
+  "source_frequency_hz": 7074000,
+  "frequency_translation_hz": 125000000,
+  "attenuator_db": 30,
+  "tx_ft8_text": "CQ K1ABC FN42",
+  "confirm_live_tx": true
+}
+```
+
+TX is bounded to 30 seconds and RX capture to 32 seconds so the UTC-synchronized
+transmitter and receiver see at least one complete 15-second FT8 slot and the
+decoder has time to publish its result. Live TX requires
+`confirm_live_tx=true`, and requests declaring less than 30 dB attenuation are
+rejected. `metrics.passed` is true only when the firmware decoder returns the
+exact transmitted message. Poll `GET /radio/loopback/ft8/status` for the last
+result. Never use a direct unattenuated TX-to-RX cable.
+
+Observed cabled-loopback result with TX1 connected to RX1 through 30 dB:
+
+```json
+{
+  "state": "complete",
+  "source_frequency_hz": 7074000,
+  "frequency_translation_hz": 125000000,
+  "rx_frequency_hz": 132074000,
+  "tx_frequency_hz": 132074000,
+  "attenuator_db": 30,
+  "metrics": {
+    "passed": true,
+    "decoded_texts": ["CQ K1ABC FN42"],
+    "ft8_decode": {
+      "slot_utc": "2026-07-19T02:35:45Z",
+      "slots_completed": 1,
+      "slots_dropped": 0,
+      "decode_time_ms": 112.992,
+      "candidate_count": 15,
+      "message_count": 1,
+      "messages": [
+        {
+          "time_offset_s": 1.44,
+          "audio_frequency_hz": 1500.0,
+          "sync_score": 23,
+          "text": "CQ K1ABC FN42"
+        }
+      ]
+    }
+  }
+}
+```
+
 `POST /radio/loopback/cw`
 
 Runs a bounded closed-loop CW diagnostic. Firmware starts the CW RX audio
@@ -1387,6 +1491,7 @@ carrier
 am
 fm
 cw
+ft8
 ```
 
 Stock TX profiles:
@@ -1396,6 +1501,7 @@ TX_TEST_TONE
 TX_AUDIO_AM
 TX_AUDIO_FM
 TX_CW
+TX_FT8_LOOPBACK
 ```
 
 Behavior:
@@ -1403,7 +1509,7 @@ Behavior:
 - Requires a TX-enabled profile.
 - Requires explicit confirmation for live RF.
 - Bounds duration, amplitude, tone frequency, sample rate, TX gain, audio rate,
-  modulation index/deviation, CW text, and CW speed.
+  modulation index/deviation, CW text/speed, and FT8 message text.
 - Applies TX LO, TX bandwidth, TX sample rate, TX gain, and ENSM mode.
 - Runs `/usr/sbin/pluto-tx-backend`, currently a symlink to the small libiio
   backend also used by loopback.

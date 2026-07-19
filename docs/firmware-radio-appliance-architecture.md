@@ -6,8 +6,8 @@ The firmware image owns repeatable radio behavior. Applications own user intent,
 pass selection, UI, filtering policy, and workflow.
 
 This first milestone adds a firmware-side radio control surface that can be
-reused by satellite audio, CW monitor, NOAA diagnostics, FM broadcast tests, IQ
-capture tools, and future scanner-style applications.
+reused by satellite audio, CW and FT8 decoding, NOAA diagnostics, FM broadcast
+tests, IQ capture tools, and future scanner-style applications.
 
 ## First Implemented Milestone
 
@@ -40,6 +40,7 @@ Initial reusable profiles:
 - `NOAA_NFM`
 - `SAT_AUDIO_NFM`
 - `SAT_CW`
+- `FT8_40M_HAMITUP`
 - `IQ_CAPTURE`
 - `LOOPBACK_TEST`
 
@@ -78,14 +79,23 @@ The production demodulator is intentionally isolated behind
 `/usr/sbin/pluto-audio-backend`. That executable is launched with profile,
 demod, input sample rate, audio-rate, filter, CW/BFO, and FIFO environment
 variables. This keeps the app-facing API stable while the RF/audio DSP
-implementation is tuned.
+implementation is tuned. CW and FT8 decode state follows the same sidecar/API
+path as audio telemetry, so applications do not need a separate decoder daemon
+or private status protocol.
 
 For production decoded audio, the firmware now stages a `pluto-audio-dsp`
 Buildroot package. It compiles a small C backend around libiio and liquid-dsp.
-That is the preferred path for clean NFM/WFM/AM/CW audio because the hard DSP
+That is the preferred path for clean NFM/WFM/AM/CW/FT8 audio because the hard DSP
 parts stay in a maintained SDR library instead of growing into custom firmware
 code. The Python `/usr/sbin/pluto-audio-ref-backend` remains as a small
 reference/fallback path and host validation aid, not as the final quality target.
+
+FT8 uses the lightweight MIT-licensed `kgoba/ft8_lib` decoder pinned by the
+Buildroot `ft8-lib` package. The native backend extracts the USB audio passband,
+collects UTC-aligned 15-second waterfalls, and decodes completed slots on a
+worker thread so IIO capture can continue. The initial bundled profile targets
+40 m at 7.074 MHz through a Ham It Up +125 MHz converter, which places the Pluto
+hardware LO at 132.074 MHz.
 
 Audio status is part of the API contract, not an app-local convention. The
 production backend writes `/var/run/pluto-radio/audio-backend-status.json`; the

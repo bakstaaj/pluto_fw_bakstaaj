@@ -23,6 +23,8 @@ files=(
 	buildroot/board/pluto/pluto-radio-api
 	buildroot/board/pluto/pluto-audio-backend
 	buildroot/board/pluto/pluto-audio-dsp/pluto-audio-backend.c
+	buildroot/board/pluto/pluto-audio-dsp/pluto-ft8-decoder.c
+	buildroot/board/pluto/pluto-audio-dsp/pluto-ft8-decoder.h
 	buildroot/board/pluto/pluto-audio-dsp/pluto-loopback-backend.c
 	buildroot/board/pluto/pluto-audio-dsp/pluto-spectrum-backend.c
 	buildroot/board/pluto/pluto-audio-sim-backend
@@ -34,6 +36,9 @@ files=(
 	buildroot/board/pluto/web/img/pluto-dashboard.css
 	buildroot/package/pluto-audio-dsp/Config.in
 	buildroot/package/pluto-audio-dsp/pluto-audio-dsp.mk
+	buildroot/package/ft8-lib/Config.in
+	buildroot/package/ft8-lib/ft8-lib.hash
+	buildroot/package/ft8-lib/ft8-lib.mk
 	buildroot/package/liquid-dsp/liquid-dsp.mk
 	scripts/validate-pluto-radio-api.sh
 	scripts/check-firmware-size-budget.py

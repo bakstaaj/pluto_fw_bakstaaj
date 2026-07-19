@@ -14,6 +14,59 @@ The generated `config.txt` also includes `device_persistent_keys = 0` under `[AC
 
 ## Read This First
 
+## Firmware FT8 Decoder
+
+This tree includes a receive-only FT8 decoder built into the same native radio
+backend used by the firmware CW decoder. The initial profile is
+`FT8_40M_HAMITUP`: 40 m USB FT8 at the 7.074 MHz dial frequency through a Ham It
+Up +125 MHz converter. The Pluto hardware LO is therefore 132.074 MHz. Accurate
+UTC time and the upconverter are required; this profile is not for a direct
+7.074 MHz antenna connection to the Pluto.
+
+Start a decode session through the firmware API:
+
+```sh
+curl -X POST http://192.168.2.1/radio/audio/start \
+  -H "Content-Type: application/json" \
+  -d '{"profile":"FT8_40M_HAMITUP"}'
+```
+
+The audio backend follows the existing CW/audio lifecycle and begins IIO
+streaming when a live-audio reader connects. Keep a bounded reader open while
+decoding, for example:
+
+```sh
+curl "http://192.168.2.1/radio/audio/live.wav?seconds=60" -o ft8-monitor.wav
+```
+
+Poll the decoder state and decoded messages with:
+
+```sh
+curl http://192.168.2.1/radio/audio/status
+```
+
+Results are returned in `audio.ft8_decode`. The first partial 15-second slot is
+discarded; subsequent results include the UTC slot, audio frequency, Costas
+sync score, decoded message text, decode time, and dropped-slot count. Stop the
+session with `POST /radio/audio/stop`.
+
+### 30 dB cable loopback test
+
+Connect `TX1` to `RX1` through a **30 dB RF attenuator**. The bounded test uses
+the common 40 m FT8 dial frequency, 7.074 MHz, and simulates the +125 MHz
+upconverter by tuning both Pluto ports to 132.074 MHz:
+
+```sh
+curl -X POST http://192.168.2.1/radio/loopback/ft8 \
+  -H 'Content-Type: application/json' \
+  -d '{"attenuator_db":30,"confirm_live_tx":true}'
+```
+
+It transmits `CQ K1ABC FN42` at conservative power for 30 seconds, keeps the
+receiver open for 32 seconds, and passes only when the firmware decoder
+recovers that exact message. Never connect TX1 directly to RX1 without the
+attenuator.
+
 ## SD Card Boot Image For SD-Boot Pluto Boards
 
 Use this procedure for the newer Pluto-style boards that boot from a removable SD card and have boot DIP switches labeled `JTAG`, `SD`, and `OSPI`. This path does not require DFU mode, a DFU pushbutton, or MISO jumpers. Keep the original vendor SD card unchanged and write this image to a separate card.
@@ -49,7 +102,7 @@ The Pluto-hosted radio API documentation and endpoint test page is available at:
 http://192.168.2.1/api-test.html
 ```
 
-The full app-builder API contract is maintained in `docs/firmware-api-contract_1.md`.
+The full app-builder API contract is maintained in `docs/firmware-api-contract.md`.
 Sample app clients for Python and browser-based applications are in `examples/`.
 
 ### Recommended Windows Burn Tools

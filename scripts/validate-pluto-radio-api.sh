@@ -76,6 +76,7 @@ import sys
 from pathlib import Path
 
 source = Path("buildroot/board/pluto/pluto-audio-dsp/pluto-audio-backend.c").read_text(encoding="utf-8")
+ft8_source = Path("buildroot/board/pluto/pluto-audio-dsp/pluto-ft8-decoder.c").read_text(encoding="utf-8")
 assert "errno == EINTR" in source
 assert "PLUTO_AUDIO_BACKEND_STATUS_FILE" in source
 assert "audio_sink_open_failed" in source
@@ -92,6 +93,10 @@ assert "PLUTO_AUDIO_FM_CHANNEL_FILTER" in source
 assert "PLUTO_AUDIO_FM_LIMITER" in source
 assert "fm_channel_filter" in source
 assert "fm_limiter" in source
+assert "DEMOD_FT8" in source
+assert "pluto_ft8_decoder_add_audio" in source
+assert "ftx_find_candidates" in ft8_source
+assert "ftx_decode_candidate" in ft8_source
 
 import threading
 import urllib.request
@@ -137,7 +142,7 @@ PY
 "$python_bin" "$api" self-test-status >/dev/null
 "$python_bin" "$api" doppler-status >/dev/null
 
-for profile in FM_BROADCAST_WFM NOAA_NFM SAT_AUDIO_NFM SAT_CW IQ_CAPTURE LOOPBACK_TEST TX_AUDIO_AM TX_AUDIO_FM TX_CW TX_TEST_TONE; do
+for profile in FM_BROADCAST_WFM NOAA_NFM SAT_AUDIO_NFM SAT_CW FT8_40M_HAMITUP FT8_40M_LOOPBACK IQ_CAPTURE LOOPBACK_TEST TX_AUDIO_AM TX_AUDIO_FM TX_CW TX_FT8_LOOPBACK TX_TEST_TONE; do
 	"$python_bin" "$api" apply "$profile" >/dev/null
 done
 
@@ -449,6 +454,8 @@ PY
 "$python_bin" "$api" loopback-start LOOPBACK_TEST --simulate >/dev/null
 "$python_bin" "$api" loopback-demod --simulate --confirm-live-tx >/dev/null
 "$python_bin" "$api" loopback-demod-status >/dev/null
+"$python_bin" "$api" loopback-ft8 --simulate --confirm-live-tx attenuator_db=30 >/dev/null
+"$python_bin" "$api" loopback-ft8-status >/dev/null
 "$python_bin" "$api" tx-start TX_TEST_TONE --simulate >/dev/null
 "$python_bin" "$api" tx-start TX_TEST_TONE --simulate tx_mode=carrier >/dev/null
 "$python_bin" "$api" tx-start TX_AUDIO_AM --simulate >/dev/null
@@ -515,6 +522,16 @@ fi
 
 if PLUTO_RADIO_DRY_RUN=0 "$python_bin" "$api" loopback-demod simulate=0 >/dev/null 2>&1; then
 	echo "live loopback demod started without confirmation" >&2
+	exit 1
+fi
+
+if PLUTO_RADIO_DRY_RUN=0 "$python_bin" "$api" loopback-ft8 attenuator_db=30 >/dev/null 2>&1; then
+	echo "live FT8 loopback started without confirmation" >&2
+	exit 1
+fi
+
+if "$python_bin" "$api" loopback-ft8 --simulate --confirm-live-tx attenuator_db=29 >/dev/null 2>&1; then
+	echo "FT8 loopback accepted less than 30 dB attenuation" >&2
 	exit 1
 fi
 

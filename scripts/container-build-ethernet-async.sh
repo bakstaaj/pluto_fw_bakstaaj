@@ -125,6 +125,8 @@ patched_files=(
 	buildroot/board/pluto/pluto-radio-api \
 	buildroot/board/pluto/pluto-audio-backend \
 	buildroot/board/pluto/pluto-audio-dsp/pluto-audio-backend.c \
+	buildroot/board/pluto/pluto-audio-dsp/pluto-ft8-decoder.c \
+	buildroot/board/pluto/pluto-audio-dsp/pluto-ft8-decoder.h \
 	buildroot/board/pluto/pluto-audio-dsp/pluto-loopback-backend.c \
 	buildroot/board/pluto/pluto-audio-dsp/pluto-spectrum-backend.c \
 	buildroot/board/pluto/pluto-audio-sim-backend \
@@ -136,12 +138,15 @@ patched_files=(
 	buildroot/board/pluto/pluto-radio/profiles/SAT_AUDIO_NFM.json \
 	buildroot/board/pluto/pluto-radio/profiles/SAT_CW.json \
 	buildroot/board/pluto/pluto-radio/profiles/CB_AM_HAMITUP.json \
+	buildroot/board/pluto/pluto-radio/profiles/FT8_40M_HAMITUP.json \
+	buildroot/board/pluto/pluto-radio/profiles/FT8_40M_LOOPBACK.json \
 	buildroot/board/pluto/pluto-radio/profiles/UHF_AUDIO_NFM_LOOPBACK.json \
 	buildroot/board/pluto/pluto-radio/profiles/UHF_CW_LOOPBACK.json \
 	buildroot/board/pluto/pluto-radio/profiles/VHF_AUDIO_NFM_LOOPBACK.json \
 	buildroot/board/pluto/pluto-radio/profiles/TX_AUDIO_AM.json \
 	buildroot/board/pluto/pluto-radio/profiles/TX_AUDIO_FM.json \
 	buildroot/board/pluto/pluto-radio/profiles/TX_CW.json \
+	buildroot/board/pluto/pluto-radio/profiles/TX_FT8_LOOPBACK.json \
 	buildroot/board/pluto/pluto-radio/profiles/TX_TEST_TONE.json \
 	buildroot/board/pluto/update.sh \
 	buildroot/board/pluto/update_frm.sh \
@@ -150,6 +155,9 @@ patched_files=(
 	buildroot/board/pluto/automounter.sh \
 	buildroot/board/pluto/pluto-eth-fallback \
 	buildroot/package/Config.in \
+	buildroot/package/ft8-lib/Config.in \
+	buildroot/package/ft8-lib/ft8-lib.hash \
+	buildroot/package/ft8-lib/ft8-lib.mk \
 	buildroot/package/liquid-dsp/liquid-dsp.mk \
 	buildroot/package/pluto-audio-dsp/Config.in \
 	buildroot/package/pluto-audio-dsp/pluto-audio-dsp.mk \
@@ -186,6 +194,8 @@ copy_from_host buildroot/board/pluto/pluto-radio-api
 copy_from_host buildroot/board/pluto/pluto-audio-backend
 mkdir -p buildroot/board/pluto/pluto-audio-dsp
 copy_from_host buildroot/board/pluto/pluto-audio-dsp/pluto-audio-backend.c
+copy_from_host buildroot/board/pluto/pluto-audio-dsp/pluto-ft8-decoder.c
+copy_from_host buildroot/board/pluto/pluto-audio-dsp/pluto-ft8-decoder.h
 copy_from_host buildroot/board/pluto/pluto-audio-dsp/pluto-loopback-backend.c
 copy_from_host buildroot/board/pluto/pluto-audio-dsp/pluto-spectrum-backend.c
 copy_from_host buildroot/board/pluto/pluto-audio-sim-backend
@@ -198,12 +208,15 @@ copy_from_host buildroot/board/pluto/pluto-radio/profiles/NOAA_NFM.json
 copy_from_host buildroot/board/pluto/pluto-radio/profiles/SAT_AUDIO_NFM.json
 copy_from_host buildroot/board/pluto/pluto-radio/profiles/SAT_CW.json
 copy_from_host buildroot/board/pluto/pluto-radio/profiles/CB_AM_HAMITUP.json
+copy_from_host buildroot/board/pluto/pluto-radio/profiles/FT8_40M_HAMITUP.json
+copy_from_host buildroot/board/pluto/pluto-radio/profiles/FT8_40M_LOOPBACK.json
 copy_from_host buildroot/board/pluto/pluto-radio/profiles/UHF_AUDIO_NFM_LOOPBACK.json
 copy_from_host buildroot/board/pluto/pluto-radio/profiles/UHF_CW_LOOPBACK.json
 copy_from_host buildroot/board/pluto/pluto-radio/profiles/VHF_AUDIO_NFM_LOOPBACK.json
 copy_from_host buildroot/board/pluto/pluto-radio/profiles/TX_AUDIO_AM.json
 copy_from_host buildroot/board/pluto/pluto-radio/profiles/TX_AUDIO_FM.json
 copy_from_host buildroot/board/pluto/pluto-radio/profiles/TX_CW.json
+copy_from_host buildroot/board/pluto/pluto-radio/profiles/TX_FT8_LOOPBACK.json
 copy_from_host buildroot/board/pluto/pluto-radio/profiles/TX_TEST_TONE.json
 copy_from_host buildroot/board/pluto/update.sh
 copy_from_host buildroot/board/pluto/update_frm.sh
@@ -214,8 +227,12 @@ copy_from_host buildroot/board/pluto/pluto-eth-fallback
 copy_tree_from_host buildroot/board/pluto/web
 find buildroot/board/pluto/web -type f -exec chmod 0644 {} +
 mkdir -p buildroot/package/pluto-audio-dsp
+mkdir -p buildroot/package/ft8-lib
 mkdir -p buildroot/package/python-sgp4
 copy_from_host buildroot/package/Config.in
+copy_from_host buildroot/package/ft8-lib/Config.in
+copy_from_host buildroot/package/ft8-lib/ft8-lib.hash
+copy_from_host buildroot/package/ft8-lib/ft8-lib.mk
 copy_from_host buildroot/package/liquid-dsp/liquid-dsp.mk
 copy_from_host buildroot/package/pluto-audio-dsp/Config.in
 copy_from_host buildroot/package/pluto-audio-dsp/pluto-audio-dsp.mk
@@ -326,6 +343,8 @@ if ! grep -q '^BR2_PACKAGE_FFTW_SINGLE=y$' buildroot/.config; then
 	fi
 fi
 if [ "$rebuild_audio_dsp" = "1" ]; then
+	echo "Rebuilding ft8-lib package for decoder/encoder source changes"
+	make -C buildroot ft8-lib-rebuild
 	echo "Rebuilding pluto-audio-dsp package for debug/source changes"
 	make -C buildroot pluto-audio-dsp-rebuild
 fi
