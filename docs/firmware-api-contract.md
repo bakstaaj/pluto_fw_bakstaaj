@@ -276,11 +276,15 @@ TX-capable profiles add explicit transmit fields:
 {
   "name": "TX_TEST_TONE",
   "tx_allowed": true,
-  "tx_mode": "tone",
+  "tx_mode": "fm",
   "tx_duration_limit_seconds": 10,
   "tx_gain_db": -30.0,
-  "tx_tone_hz": 10000,
-  "tx_amplitude": 0.05
+  "tx_tone_hz": 0,
+  "tx_amplitude": 0.05,
+  "tx_audio_source": "tone",
+  "tx_audio_rate_hz": 8000,
+  "tx_audio_tone_hz": 1000,
+  "tx_fm_deviation_hz": 5000
 }
 ```
 
@@ -312,6 +316,8 @@ FT8 loopback TX profiles add the encoded message and base audio frequency:
 Applications can provide audio by writing signed 16-bit little-endian mono PCM
 to a file or FIFO under `/mnt/jffs2`, `/media`, `/tmp`, or `/var/run`, then
 starting TX with `tx_audio_source=file` and `tx_audio_path=/path/to/audio.pcm`.
+For AM/FM tone-source requests, `tx_tone_hz` is accepted as a compatibility
+alias for `tx_audio_tone_hz` when `tx_audio_tone_hz` is omitted.
 
 Validation bounds:
 
@@ -1467,9 +1473,10 @@ Request:
   "profile": "TX_TEST_TONE",
   "duration_seconds": 10,
   "frequency_hz": 915000000,
-  "tx_mode": "tone",
+  "tx_mode": "fm",
   "tx_gain_db": -30,
-  "tx_tone_hz": 10000,
+  "tx_audio_tone_hz": 1200,
+  "tx_fm_deviation_hz": 5000,
   "tx_amplitude": 0.05,
   "simulate": true
 }
@@ -1513,7 +1520,8 @@ Behavior:
 - Applies TX LO, TX bandwidth, TX sample rate, TX gain, and ENSM mode.
 - Runs `/usr/sbin/pluto-tx-backend`, currently a symlink to the small libiio
   backend also used by loopback.
-- Returns bounded metrics and stores state in `/var/run/pluto-radio/tx.json`.
+- Returns bounded IQ metrics plus TX audio source/rate/tone, file-read evidence,
+  measured audio tone, and stores state in `/var/run/pluto-radio/tx.json`.
 
 AM test-tone request:
 
