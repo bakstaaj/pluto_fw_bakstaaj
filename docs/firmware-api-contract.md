@@ -1286,7 +1286,7 @@ Response fields:
     "tx_frequency_hz": 915000000,
     "metrics": {
       "sample_count": 192000,
-      "sample_rate_hz": 520999,
+      "sample_rate_hz": 2400000,
       "duration_ms": 4000,
       "tx_mode": "fm",
       "carrier_offset_hz": 25000,
@@ -1411,7 +1411,7 @@ Response fields:
     "tx_cw_text": "CQ TEST",
     "tx_cw_wpm": 12,
     "metrics": {
-      "sample_rate_hz": 520999,
+      "sample_rate_hz": 2400000,
       "tx_mode": "cw",
       "rx_rms_dbfs": -78.0,
       "rx_peak_dbfs": -63.0,

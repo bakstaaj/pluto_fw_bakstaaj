@@ -200,6 +200,7 @@ copy_from_host buildroot/board/pluto/pluto-audio-dsp/pluto-loopback-backend.c
 copy_from_host buildroot/board/pluto/pluto-audio-dsp/pluto-spectrum-backend.c
 copy_from_host buildroot/board/pluto/pluto-audio-sim-backend
 copy_from_host buildroot/board/pluto/pluto-doppler-worker
+rm -rf buildroot/board/pluto/pluto-radio/profiles
 mkdir -p buildroot/board/pluto/pluto-radio/profiles
 copy_from_host buildroot/board/pluto/pluto-radio/profiles/FM_BROADCAST_WFM.json
 copy_from_host buildroot/board/pluto/pluto-radio/profiles/IQ_CAPTURE.json
@@ -213,11 +214,13 @@ copy_from_host buildroot/board/pluto/pluto-radio/profiles/FT8_40M_LOOPBACK.json
 copy_from_host buildroot/board/pluto/pluto-radio/profiles/UHF_AUDIO_NFM_LOOPBACK.json
 copy_from_host buildroot/board/pluto/pluto-radio/profiles/UHF_CW_LOOPBACK.json
 copy_from_host buildroot/board/pluto/pluto-radio/profiles/VHF_AUDIO_NFM_LOOPBACK.json
+copy_from_host buildroot/board/pluto/pluto-radio/profiles/VHF_CW_LOOPBACK.json
 copy_from_host buildroot/board/pluto/pluto-radio/profiles/TX_AUDIO_AM.json
 copy_from_host buildroot/board/pluto/pluto-radio/profiles/TX_AUDIO_FM.json
 copy_from_host buildroot/board/pluto/pluto-radio/profiles/TX_CW.json
 copy_from_host buildroot/board/pluto/pluto-radio/profiles/TX_FT8_LOOPBACK.json
 copy_from_host buildroot/board/pluto/pluto-radio/profiles/TX_TEST_TONE.json
+chmod 0644 buildroot/board/pluto/pluto-radio/profiles/*.json
 copy_from_host buildroot/board/pluto/update.sh
 copy_from_host buildroot/board/pluto/update_frm.sh
 copy_from_host buildroot/board/pluto/msd/config.frm

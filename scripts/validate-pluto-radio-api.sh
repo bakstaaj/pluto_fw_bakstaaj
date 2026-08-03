@@ -459,7 +459,7 @@ PY
 "$python_bin" "$api" tx-start TX_TEST_TONE --simulate >/dev/null
 "$python_bin" "$api" tx-start TX_TEST_TONE --simulate tx_mode=carrier >/dev/null
 "$python_bin" "$api" tx-start TX_AUDIO_AM --simulate >/dev/null
-"$python_bin" "$api" tx-start TX_AUDIO_FM --simulate tx_audio_tone_hz=1200 tx_fm_deviation_hz=3500 >/dev/null
+"$python_bin" "$api" tx-start TX_AUDIO_FM --simulate tx_audio_tone_hz=1200 tx_fm_deviation_hz=3500 | "$python_bin" -c 'import json,sys; payload=json.load(sys.stdin); metrics=payload["tx"]["metrics"]; assert metrics["sample_rate_hz"] == 2400000; assert metrics["tx_push_count"] > 0; assert metrics["tx_sample_count"] > 0; assert metrics["tx_peak_dbfs"] > -120.0'
 "$python_bin" "$api" tx-start TX_CW --simulate tx_cw_text='CQ TEST' tx_cw_wpm=18 >/dev/null
 "$python_bin" "$api" tx-stop >/dev/null
 "$python_bin" "$api" doppler-plan SAT_AUDIO_NFM >/dev/null

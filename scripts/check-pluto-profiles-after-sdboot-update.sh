@@ -33,10 +33,13 @@ expected=[
   "UHF_AUDIO_NFM_LOOPBACK",
   "UHF_CW_LOOPBACK",
   "CB_AM_HAMITUP",
+  "TX_AUDIO_FM",
+  "TX_CW",
 ]
 missing=[name for name in expected if name not in names]
 print("profile_count=%s" % len(names))
 print("missing=%s" % missing)
+profiles={p.get("name"): p for p in data.get("profiles", [])}
 for profile in data.get("profiles", []):
     if profile.get("name") == "CB_AM_HAMITUP":
         print("cb_source=%s cb_translation=%s cb_default=%s" % (
@@ -44,6 +47,20 @@ for profile in data.get("profiles", []):
             profile.get("frequency_translation_hz"),
             profile.get("default_frequency_hz"),
         ))
+for name in ("TX_AUDIO_FM", "TX_CW"):
+    profile=profiles.get(name, {})
+    print("%s sample_rate=%s rf_bandwidth=%s fir_enabled=%s" % (
+        name,
+        profile.get("sample_rate_hz"),
+        profile.get("rf_bandwidth_hz"),
+        profile.get("fir_enabled"),
+    ))
+    if profile.get("sample_rate_hz") != 2400000:
+        raise SystemExit("%s sample_rate_hz is not 2400000" % name)
+    if profile.get("rf_bandwidth_hz") != 1000000:
+        raise SystemExit("%s rf_bandwidth_hz is not 1000000" % name)
+    if profile.get("fir_enabled") is not False:
+        raise SystemExit("%s fir_enabled is not false" % name)
 if missing:
     raise SystemExit(1)
 PY
