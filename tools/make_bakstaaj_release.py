@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Assemble a bakStaaJ Pluto release package from known-good local artifacts."""
+"""Assemble an N0JCG Pluto release package from known-good local artifacts."""
 
 from __future__ import annotations
 
@@ -327,7 +327,7 @@ def write_hashes(release_dir: Path) -> None:
 
 def write_readme(release_dir: Path, version: str, source_dir: Path) -> None:
     source_label = source_dir.name
-    text = f"""bakStaaJ Pluto Firmware Release
+    text = f"""N0JCG Pluto Firmware Release
 
 Version: {version}
 
@@ -345,8 +345,8 @@ Firmware update files:
 
 SD boot files:
 - sdcard/sdimg/
-- sdcard/bakstaaj-{version}-sdcard-files.zip
-- sdcard/bakstaaj-{version}-sdcard.img
+- sdcard/n0jcg-{version}-sdcard-files.zip
+- sdcard/n0jcg-{version}-sdcard.img
 
 For the new SD-boot board, use the SD-card files or image. The SD boot package
 keeps the OEM BOOT.bin and uEnv.txt boot chain, uses the OEM DTB with qspi-nvmfs
@@ -373,7 +373,7 @@ Notes:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo", type=Path, default=Path.cwd())
-    parser.add_argument("--version", default="v0.39-bakstaaj.1")
+    parser.add_argument("--version", default="v0.39-N0JCG.5f")
     parser.add_argument("--source-dir", type=Path, default=Path("build-large-jffs3-sdcard-ethernet-pluto-plus"))
     parser.add_argument("--oem-dir", type=Path, default=Path(r"C:\tmp\oem-pluto-sd"))
     parser.add_argument("--out-dir", type=Path, default=None)
@@ -403,7 +403,7 @@ def main() -> None:
     source_dir = args.source_dir if args.source_dir.is_absolute() else repo / args.source_dir
     source_dir = source_dir.resolve()
     oem_dir = args.oem_dir.resolve()
-    release_dir = args.out_dir if args.out_dir else repo / "release-packages" / f"bakstaaj-{args.version}"
+    release_dir = args.out_dir if args.out_dir else repo / "release-packages" / f"n0jcg-{args.version}"
     release_dir = release_dir.resolve()
 
     firmware_dir = release_dir / "firmware"
@@ -425,12 +425,12 @@ def main() -> None:
         sd_files = make_sd_files(repo, oem_dir, source_dir, source_rootfs)
         for name, data in sd_files.items():
             write_file(sdimg_dir / name, data)
-        sd_files_zip = release_dir / "pluto-sdcard-files.zip"
+        sd_files_zip = release_dir / f"n0jcg-{args.version}-sdcard-files.zip"
         if not args.skip_sd_files_zip:
             zip_dir(sdimg_dir, sd_files_zip)
         make_fat32_ext4_image(
             make_fat32_sd_files(sd_files),
-            release_dir / "pluto-sdcard.img",
+            release_dir / f"n0jcg-{args.version}-sdcard.img",
             image_mib=args.sd_image_mib,
             boot_mib=args.sd_boot_mib,
         )
@@ -471,19 +471,19 @@ def main() -> None:
     sd_files = make_sd_files(repo, oem_dir, source_dir, patched_rootfs)
     for name, data in sd_files.items():
         write_file(sdimg_dir / name, data)
-    sd_files_zip = sdcard_dir / f"bakstaaj-{args.version}-sdcard-files.zip"
+    sd_files_zip = sdcard_dir / f"n0jcg-{args.version}-sdcard-files.zip"
     zip_dir(sdimg_dir, sd_files_zip)
     fat32_files = make_fat32_sd_files(sd_files)
     make_fat32_ext4_image(
         fat32_files,
-        sdcard_dir / f"bakstaaj-{args.version}-sdcard.img",
+        sdcard_dir / f"n0jcg-{args.version}-sdcard.img",
         image_mib=args.sd_image_mib,
         boot_mib=args.sd_boot_mib,
     )
 
     write_readme(release_dir, args.version, source_dir)
     write_hashes(release_dir)
-    release_zip = release_dir.parent / f"bakstaaj-{args.version}-release.zip"
+    release_zip = release_dir.parent / f"n0jcg-{args.version}-release.zip"
     zip_dir(release_dir, release_zip)
     write_hashes(release_dir)
 

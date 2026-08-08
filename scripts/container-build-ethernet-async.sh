@@ -120,6 +120,7 @@ patched_files=(
 	buildroot/board/pluto/ifupdown.sh \
 	buildroot/board/pluto/lighttpd.conf \
 	buildroot/board/pluto/post-build.sh \
+	buildroot/board/pluto/VERSIONS \
 	buildroot/board/pluto/pluto-sdcard-prepare \
 	buildroot/board/pluto/pluto-web-apply-settings \
 	buildroot/board/pluto/pluto-radio-api \
@@ -188,6 +189,7 @@ copy_from_host buildroot/board/pluto/device_persistent_keys
 copy_from_host buildroot/board/pluto/ifupdown.sh
 copy_from_host buildroot/board/pluto/lighttpd.conf
 copy_from_host buildroot/board/pluto/post-build.sh
+copy_from_host buildroot/board/pluto/VERSIONS
 copy_from_host buildroot/board/pluto/pluto-sdcard-prepare
 copy_from_host buildroot/board/pluto/pluto-web-apply-settings
 copy_from_host buildroot/board/pluto/pluto-radio-api
