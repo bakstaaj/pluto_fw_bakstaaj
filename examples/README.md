@@ -1,6 +1,12 @@
-# Pluto Radio App-Builder Examples
+# N0JCG Pluto Firmware
 
-These examples show the firmware API patterns apps should use first:
+## App-Builder Examples
+
+**Open Radio Platform**
+**Firmware contract:** `v0.39-N0JCG.5f`
+
+These N0JCG examples show the firmware API patterns applications should use
+first:
 
 - discover health and profiles
 - check TX guardrails before transmitting

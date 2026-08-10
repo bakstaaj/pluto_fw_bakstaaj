@@ -1,8 +1,44 @@
-# Pluto Firmware Radio API Contract
+# N0JCG Pluto Firmware
 
-This document is the app-builder contract for the Pluto firmware radio service.
-It describes the HTTP API exposed on the Pluto itself and the matching
+## Radio API Contract
+
+**Open Radio Platform**
+**Firmware:** `v0.39-N0JCG.5f`
+**Audience:** app builders, station operators, and maintainers
+**Status:** current implementation contract
+
+This is the N0JCG app-builder contract for the Pluto firmware radio service. It
+describes the HTTP API exposed on the Pluto itself and the matching
 `pluto-radio-api` CLI used for on-device operation and host-side validation.
+The contract keeps RF/IIO ownership, DSP, audio streaming, calibration,
+diagnostics, and guarded TX in firmware so multiple N0JCG applications can use
+the same boundary.
+
+> **Brand and safety**
+> Use the exact spelling `N0JCG` with the numeral zero. Treat every live-TX
+> request as an operator action: validate the guardrails, show the plan, require
+> explicit `confirm_live_tx=true`, and use a suitable load, attenuated loopback,
+> or legal antenna connection.
+
+### Implementation source
+
+The route table and validation behavior documented here are implemented in:
+
+```text
+buildroot/board/pluto/pluto-radio-api
+```
+
+The release identity for this revision is:
+
+```text
+Firmware:  v0.39-N0JCG.5f
+Package:   n0jcg-v0.39-N0JCG.5f-release.zip
+Status:    device-fw v0.39-N0JCG.5f
+```
+
+The firmware source is authoritative for accepted fields, bounds, status
+values, and error behavior. Application clients should not infer capabilities
+from a profile name alone; call the relevant status or guardrail endpoint.
 
 ## Transport
 
@@ -55,6 +91,27 @@ All control and status endpoints return JSON. Successful responses include
   }
 }
 ```
+
+The HTTP handler accepts `GET`, `POST`, `PUT`, and `PATCH`; documented control
+operations use `GET` and `POST`. Query parameters are parsed for every method.
+For `POST`, `PUT`, and `PATCH`, a JSON body is merged into the query payload,
+with body fields taking precedence. Unsupported routes return HTTP 404 with
+`error=not_found` and the requested method/path in `details`.
+
+### Streaming exceptions
+
+These paths bypass the JSON route dispatcher and return a streaming response:
+
+| Method | Path | Response |
+|---|---|---|
+| `GET` | `/radio/audio/live.pcm` | signed 16-bit little-endian mono PCM |
+| `GET` | `/radio/audio/live.wav` | WAV containing the same PCM stream |
+| `GET` | `/radio/spectrum/stream` | newline-delimited JSON (`application/x-ndjson`) |
+| `GET` | `/capture/download` | stored capture bytes with download headers |
+
+The short aliases `/audio/live.pcm`, `/audio/live.wav`, and
+`/spectrum/stream` are accepted by the current handler. Capture download has
+no short alias.
 
 ## App Builder Quick Start
 
@@ -129,6 +186,10 @@ System:
 
 ```text
 GET  /system/health
+GET  /system/metrics
+GET  /system/settings
+POST /system/settings
+GET  /system/files
 GET  /system/logs
 GET  /system/watchdog
 POST /system/watchdog/check
@@ -207,6 +268,7 @@ Calibration:
 ```text
 GET  /radio/calibration/status
 POST /radio/calibration/apply
+POST /radio/calibration/measure
 ```
 
 Doppler:
@@ -218,6 +280,27 @@ POST /radio/doppler/start
 POST /radio/doppler/stop
 POST /radio/doppler/tick
 ```
+
+Current short aliases are retained for existing clients:
+
+```text
+/status, /profiles, /health
+/dashboard/metrics, /dashboard/settings, /dashboard/files
+/logs, /watchdog, /watchdog/check
+/captures, /capture/meta
+/spectrum/status, /spectrum/snapshot, /spectrum/top, /spectrum/stream
+/loopback/status, /loopback/start, /loopback/demod, /loopback/cw, /loopback/ft8
+/tx/status, /tx/start, /tx/stop, /tx/guardrails
+/calibration/status, /calibration/apply, /calibration/measure
+/self-test/status, /self-test
+/doppler/status, /doppler/plan, /doppler/start, /doppler/stop, /doppler/tick
+/apply, /tune, /stop
+/audio/status, /audio/start, /audio/retune, /audio/demod-self-test,
+/audio/stop, /audio/live.pcm, /audio/live.wav
+```
+
+The firmware also accepts `POST /capture` as an alias for
+`POST /capture/start`. It does not accept `POST /capture/download`.
 
 ## Profiles
 
@@ -334,7 +417,10 @@ tx_am_modulation_index: 0.0 to 1.0
 tx_fm_deviation_hz: 100 Hz to 25 kHz and below sample_rate_hz / 8
 tx_cw_wpm: 5 to 40
 tx_ft8_text: 1 to 35 printable ASCII characters
-tx_duration_limit_seconds: 0 to PLUTO_TX_MAX_SECONDS, default 30
+tx_cw_text: 1 to 80 characters from the firmware CW alphabet
+tx_tone_hz: 0 to 200 kHz; tone mode additionally requires at least 100 Hz and
+must remain below sample_rate_hz / 4
+duration_seconds: 1 to the active profile and PLUTO_TX_MAX_SECONDS limits
 loopback_duration_limit_seconds: 0 to PLUTO_LOOPBACK_MAX_SECONDS, default 10
 ```
 
